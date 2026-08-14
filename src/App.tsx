@@ -24,9 +24,13 @@ import ContextMenu from './components/ContextMenu'
 import AboutDialog from './components/AboutDialog'
 import DashboardDialog from './components/DashboardDialog'
 import UpdateDialog from './components/UpdateDialog'
+import WhatsNewDialog from './components/WhatsNewDialog'
 import Backdrop from './components/Backdrop'
 import { loadUiPrefs, saveUiPrefs, type UiPrefs } from './lib/uiPrefs'
 import { mixHex, hexToRgbString } from './lib/color'
+import { CHANGELOG, getChangesSince, type ChangelogEntry } from './lib/changelog'
+
+const LAST_SEEN_VERSION_KEY = 'gb_lastSeenVersion'
 
 export default function App(): JSX.Element {
   const [games, setGames] = useState<Game[]>([])
@@ -71,6 +75,7 @@ export default function App(): JSX.Element {
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [updateDownloading, setUpdateDownloading] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [whatsNew, setWhatsNew] = useState<{ title: string; entries: ChangelogEntry[] } | null>(null)
 
   useEffect(() => {
     localStorage.setItem('tileWidth', String(tileWidth))
@@ -114,6 +119,21 @@ export default function App(): JSX.Element {
     return () => clearTimeout(timer)
   }, [])
 
+  useEffect(() => {
+    window.api.getAppInfo().then((info) => {
+      const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY)
+      // No recorded version yet: either a genuinely fresh install, or an
+      // upgrade from a build that predates this feature entirely (can't
+      // tell the two apart) - either way, showing just the current
+      // version's own entry is the right amount of noise for a first run.
+      const entries = lastSeen ? getChangesSince(lastSeen, info.version) : CHANGELOG.filter((e) => e.version === info.version)
+      if (entries.length > 0) {
+        setWhatsNew({ title: `What's New in v${info.version}`, entries })
+      }
+      localStorage.setItem(LAST_SEEN_VERSION_KEY, info.version)
+    })
+  }, [])
+
   const anyModalOpen =
     settingsOpen ||
     candidates !== null ||
@@ -122,7 +142,8 @@ export default function App(): JSX.Element {
     infoMessage !== null ||
     aboutOpen ||
     dashboardOpen ||
-    updateCheck !== null
+    updateCheck !== null ||
+    whatsNew !== null
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
@@ -315,6 +336,11 @@ export default function App(): JSX.Element {
     } finally {
       setCheckingForUpdate(false)
     }
+  }
+
+  function handleViewChangelog(): void {
+    setAboutOpen(false)
+    setWhatsNew({ title: 'Changelog', entries: CHANGELOG })
   }
 
   async function handleDownloadUpdate(): Promise<void> {
@@ -678,6 +704,7 @@ export default function App(): JSX.Element {
           onClose={() => setAboutOpen(false)}
           onCheckForUpdate={handleCheckForUpdate}
           checkingForUpdate={checkingForUpdate}
+          onViewChangelog={handleViewChangelog}
         />
       )}
       {dashboardOpen && <DashboardDialog games={games} onClose={() => setDashboardOpen(false)} />}
@@ -691,6 +718,9 @@ export default function App(): JSX.Element {
           onUpdate={() => void handleDownloadUpdate()}
           onLater={() => setUpdateCheck(null)}
         />
+      )}
+      {whatsNew && (
+        <WhatsNewDialog title={whatsNew.title} entries={whatsNew.entries} onClose={() => setWhatsNew(null)} />
       )}
 
       {candidates && (

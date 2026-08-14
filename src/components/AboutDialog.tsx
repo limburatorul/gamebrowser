@@ -8,6 +8,7 @@ interface Props {
   onClose: () => void
   onCheckForUpdate: () => void
   checkingForUpdate: boolean
+  onViewChangelog: () => void
 }
 
 export default function AboutDialog({
@@ -15,7 +16,8 @@ export default function AboutDialog({
   totalPlaytimeSeconds,
   onClose,
   onCheckForUpdate,
-  checkingForUpdate
+  checkingForUpdate,
+  onViewChangelog
 }: Props): JSX.Element {
   const [info, setInfo] = useState<AppInfo | null>(null)
 
@@ -57,6 +59,9 @@ export default function AboutDialog({
         <div className="modal-actions">
           <button className="btn" onClick={onCheckForUpdate} disabled={checkingForUpdate}>
             {checkingForUpdate ? 'Checking…' : 'Check for Updates'}
+          </button>
+          <button className="btn" onClick={onViewChangelog}>
+            View Changelog
           </button>
           <button className="btn" onClick={() => void window.api.openDataFolder()}>
             Open Data Folder
