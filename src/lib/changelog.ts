@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.3',
+    changes: [
+      "Fix: the automatic background screenshot download only ever ran once at startup — if that one attempt hit Steam's rate limit and backed off, nothing brought it back for the rest of the session even long after the block had actually lifted (opening the Game Details panel manually still worked fine in the meantime, which was the tell). It now automatically retries every 15 minutes."
+    ]
+  },
+  {
     version: '1.16.2',
     changes: [
       'Fix: the screenshot download backoff now stops the whole run on the first Steam rate-limit response instead of grinding through the rest of the list with a wait on every single one, and waits longer each time it happens again instead of retrying the same minute-long window against a block that likely lasts longer.',

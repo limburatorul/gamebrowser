@@ -1992,6 +1992,14 @@ if (gotSingleInstanceLock) {
     // boundary - correctly picks up backupEnabled/backupFolder/interval
     // changes made at runtime without needing to reset a timer.
     setInterval(() => void maybeRunScheduledBackup(), 15 * 60 * 1000)
+    // sweepMissingScreenshots only otherwise runs once at startup (+ once
+    // after a manual Steam import) - if that one attempt aborts early from
+    // hitting Steam's rate limit, nothing else would ever retry it for the
+    // rest of the session even long after the block has actually lifted,
+    // since there's no periodic trigger. This one is cheap to call
+    // repeatedly: it short-circuits instantly both while still inside an
+    // active backoff window and once the whole library is already cached.
+    setInterval(() => void sweepMissingScreenshots(), 15 * 60 * 1000)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
