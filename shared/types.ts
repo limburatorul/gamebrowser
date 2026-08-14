@@ -9,11 +9,12 @@ export interface Game {
   dateAdded: string
   lastPlayed: string | null
   playtimeSeconds: number
-  source: 'manual' | 'folder-scan' | 'steam' | 'epic'
+  source: 'manual' | 'folder-scan' | 'steam' | 'epic' | 'gog'
   genres: string[]
   tags: string[]
   steamAppId: number | null
   epicAppName: string | null
+  gogProductId: string | null
 }
 
 export interface GameCandidate {
@@ -126,6 +127,7 @@ export interface GameApi {
   restoreFromPath(path: string): Promise<BackupResult>
   importSteamLibrary(): Promise<ImportResult>
   importEpicLibrary(): Promise<ImportResult>
+  importGogLibrary(): Promise<ImportResult>
   checkForUpdate(): Promise<UpdateCheckResult>
   downloadUpdateAndRestart(assetUrl: string, assetSize: number, version: string): Promise<UpdateApplyResult>
 }

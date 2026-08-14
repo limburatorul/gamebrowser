@@ -60,6 +60,7 @@ const api: GameApi = {
   restoreFromPath: (path: string): Promise<BackupResult> => ipcRenderer.invoke('backup:restorePath', path),
   importSteamLibrary: (): Promise<ImportResult> => ipcRenderer.invoke('steam:import'),
   importEpicLibrary: (): Promise<ImportResult> => ipcRenderer.invoke('epic:import'),
+  importGogLibrary: (): Promise<ImportResult> => ipcRenderer.invoke('gog:import'),
   checkForUpdate: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('update:check'),
   downloadUpdateAndRestart: (assetUrl: string, assetSize: number, version: string): Promise<UpdateApplyResult> =>
     ipcRenderer.invoke('update:downloadAndRestart', assetUrl, assetSize, version)

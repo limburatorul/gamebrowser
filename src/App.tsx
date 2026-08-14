@@ -195,6 +195,7 @@ export default function App(): JSX.Element {
     if (filter === 'no-cover') list = list.filter((g) => !g.coverPath)
     if (filter === 'steam') list = list.filter((g) => g.source === 'steam')
     if (filter === 'epic') list = list.filter((g) => g.source === 'epic')
+    if (filter === 'gog') list = list.filter((g) => g.source === 'gog')
     if (genreFilter) list = list.filter((g) => g.genres.includes(genreFilter))
     if (tagFilter) list = list.filter((g) => g.tags.includes(tagFilter))
     if (search.trim()) {
@@ -314,6 +315,23 @@ export default function App(): JSX.Element {
           : result.imported === 0
             ? 'No new Epic Games titles found — everything already installed is already in your library.'
             : `Imported ${result.imported} game(s) from Epic Games.`
+      })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleImportGog(): Promise<void> {
+    setBusy(true)
+    try {
+      const result = await window.api.importGogLibrary()
+      setInfoMessage({
+        title: 'Import GOG',
+        message: result.error
+          ? `Couldn't import from GOG: ${result.error}`
+          : result.imported === 0
+            ? 'No new GOG games found — everything already installed is already in your library.'
+            : `Imported ${result.imported} game(s) from GOG.`
       })
     } finally {
       setBusy(false)
@@ -589,6 +607,7 @@ export default function App(): JSX.Element {
         onScanFolder={handleScanFolder}
         onImportSteam={handleImportSteam}
         onImportEpic={handleImportEpic}
+        onImportGog={handleImportGog}
         onFetchCovers={handleFetchCovers}
         onCleanNames={handleCleanNames}
         onOpenSettings={() => setSettingsOpen(true)}
@@ -611,6 +630,7 @@ export default function App(): JSX.Element {
           noCoverCount={games.filter((g) => !g.coverPath).length}
           steamCount={games.filter((g) => g.source === 'steam').length}
           epicCount={games.filter((g) => g.source === 'epic').length}
+          gogCount={games.filter((g) => g.source === 'gog').length}
           totalPlaytimeSeconds={totalPlaytimeSeconds}
           playtimeEntries={playtimeEntries}
           selectedIds={selectedIds}

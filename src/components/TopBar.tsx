@@ -11,6 +11,7 @@ interface Props {
   onScanFolder: () => void
   onImportSteam: () => void
   onImportEpic: () => void
+  onImportGog: () => void
   onFetchCovers: () => void
   onCleanNames: () => void
   onOpenSettings: () => void
@@ -36,6 +37,7 @@ export default function TopBar({
   onScanFolder,
   onImportSteam,
   onImportEpic,
+  onImportGog,
   onFetchCovers,
   onCleanNames,
   onOpenSettings,
@@ -73,6 +75,14 @@ export default function TopBar({
           title="Detect and import games already installed through the Epic Games Launcher"
         >
           Import Epic
+        </button>
+        <button
+          className="btn"
+          onClick={onImportGog}
+          disabled={busy}
+          title="Detect and import games already installed through GOG Galaxy"
+        >
+          Import GOG
         </button>
         <button
           className="btn"

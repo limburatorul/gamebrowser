@@ -1,6 +1,6 @@
 import { formatPlaytime } from '../lib/localFile'
 
-export type LibraryFilter = 'all' | 'favorites' | 'recent' | 'no-cover' | 'steam' | 'epic'
+export type LibraryFilter = 'all' | 'favorites' | 'recent' | 'no-cover' | 'steam' | 'epic' | 'gog'
 
 export interface PlaytimeEntry {
   id: string
@@ -16,6 +16,7 @@ interface Props {
   noCoverCount: number
   steamCount: number
   epicCount: number
+  gogCount: number
   totalPlaytimeSeconds: number
   playtimeEntries: PlaytimeEntry[]
   selectedIds: Set<string>
@@ -30,7 +31,8 @@ const ITEMS: { key: LibraryFilter; label: string; icon: string }[] = [
   { key: 'favorites', label: 'Favorites', icon: '★' },
   { key: 'no-cover', label: 'Missing Cover', icon: '🖼' },
   { key: 'steam', label: 'Steam', icon: '🎮' },
-  { key: 'epic', label: 'Epic', icon: '🟪' }
+  { key: 'epic', label: 'Epic', icon: '🟪' },
+  { key: 'gog', label: 'GOG', icon: '🟣' }
 ]
 
 export default function Sidebar({
@@ -41,6 +43,7 @@ export default function Sidebar({
   noCoverCount,
   steamCount,
   epicCount,
+  gogCount,
   totalPlaytimeSeconds,
   playtimeEntries,
   selectedIds,
@@ -54,6 +57,7 @@ export default function Sidebar({
     if (key === 'no-cover') return noCoverCount
     if (key === 'steam') return steamCount
     if (key === 'epic') return epicCount
+    if (key === 'gog') return gogCount
     return ''
   }
 

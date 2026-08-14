@@ -19,6 +19,7 @@ import type {
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
+import { findGogGames, type GogGame } from './gog'
 
 const execFileAsync = promisify(execFile)
 
@@ -81,7 +82,8 @@ async function loadLibrary(): Promise<void> {
       genres: g.genres ?? [],
       tags: g.tags ?? [],
       steamAppId: g.steamAppId ?? null,
-      epicAppName: g.epicAppName ?? null
+      epicAppName: g.epicAppName ?? null,
+      gogProductId: g.gogProductId ?? null
     }))
   } catch {
     games = []
@@ -821,7 +823,8 @@ function registerIpcHandlers(): void {
       genres: [],
       tags: [],
       steamAppId: null,
-      epicAppName: null
+      epicAppName: null,
+      gogProductId: null
     }
     games.push(game)
     await saveLibrary()
@@ -882,7 +885,8 @@ function registerIpcHandlers(): void {
         genres: [],
         tags: [],
         steamAppId: null,
-        epicAppName: null
+        epicAppName: null,
+        gogProductId: null
       }
       games.push(game)
       created.push(game)
@@ -926,7 +930,8 @@ function registerIpcHandlers(): void {
           genres: [],
           tags: [],
           steamAppId: appId,
-          epicAppName: null
+          epicAppName: null,
+          gogProductId: null
         }
         games.push(game)
         created.push(game)
@@ -982,11 +987,61 @@ function registerIpcHandlers(): void {
         genres: [],
         tags: [],
         steamAppId: null,
-        epicAppName: m.appName
+        epicAppName: m.appName,
+        gogProductId: null
       }
       games.push(game)
       created.push(game)
       existingAppNames.add(m.appName)
+    }
+
+    if (created.length > 0) {
+      await saveLibrary()
+      broadcastLibrary()
+      for (const game of created) enqueueAutoCoverFetch(game)
+    }
+    return { imported: created.length }
+  })
+
+  ipcMain.handle('gog:import', async (): Promise<ImportResult> => {
+    let gogGames: GogGame[]
+    try {
+      gogGames = await findGogGames()
+    } catch (e) {
+      return { imported: 0, error: e instanceof Error ? e.message : String(e) }
+    }
+    if (gogGames.length === 0) return { imported: 0, error: 'GOG Galaxy not found, or no games installed.' }
+
+    const existingProductIds = new Set(games.map((g) => g.gogProductId).filter((id): id is string => id !== null))
+    const created: Game[] = []
+
+    for (const g of gogGames) {
+      if (existingProductIds.has(g.productId)) continue
+      const exe = await findBestExe(g.installDir)
+      if (!exe) continue
+      const id = randomUUID()
+      const iconPath = await extractIcon(exe, id)
+      const game: Game = {
+        id,
+        name: g.name,
+        exePath: exe,
+        installDir: g.installDir,
+        coverPath: null,
+        iconPath,
+        favorite: false,
+        dateAdded: new Date().toISOString(),
+        lastPlayed: null,
+        playtimeSeconds: 0,
+        source: 'gog',
+        genres: [],
+        tags: [],
+        steamAppId: null,
+        epicAppName: null,
+        gogProductId: g.productId
+      }
+      games.push(game)
+      created.push(game)
+      existingProductIds.add(g.productId)
     }
 
     if (created.length > 0) {
@@ -1244,7 +1299,7 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1920,
     height: 1080,
-    minWidth: 1750,
+    minWidth: 1850,
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
