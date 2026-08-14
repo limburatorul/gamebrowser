@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.15.2',
+    changes: [
+      'Fix: the background screenshot download could get permanently stuck on a single slow/stalled connection and silently stop making progress for the rest of the library — every network request in the app now times out instead of potentially hanging forever.'
+    ]
+  },
+  {
     version: '1.15.1',
     changes: [
       "Fix: checking for updates from About and finding you're already up to date showed that message behind the About window instead of in front of it."

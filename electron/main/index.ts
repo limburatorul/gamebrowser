@@ -222,6 +222,27 @@ interface IgdbToken {
   expiresAt: number
 }
 
+// net.fetch has no default timeout, and merely aborting the initial request
+// isn't enough - a stall can just as easily happen mid-body (e.g. a large
+// image/exe download whose connection stops making progress after headers
+// already arrived). A single stuck request like that hangs forever, which
+// is fatal for anything that calls it in a sequential loop: sweepMissingScreenshots
+// processes hundreds of games one at a time with no per-request cutoff, so
+// one bad connection permanently stops it partway through with nothing to
+// show for it - exactly what silently happened before this existed. `fn`
+// gets the abort signal to pass into net.fetch AND should do any body
+// consumption (`.json()`/`.arrayBuffer()`) inside itself, so the whole
+// operation - not just getting a response header - is bounded by timeoutMs.
+async function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs = 15000): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fn(controller.signal)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 let igdbToken: IgdbToken | null = null
 
 async function getIgdbToken(): Promise<string | null> {
@@ -229,11 +250,13 @@ async function getIgdbToken(): Promise<string | null> {
   if (igdbToken && igdbToken.expiresAt > Date.now() + 60_000) return igdbToken.accessToken
   const url = `https://id.twitch.tv/oauth2/token?client_id=${encodeURIComponent(settings.igdbClientId)}&client_secret=${encodeURIComponent(settings.igdbClientSecret)}&grant_type=client_credentials`
   try {
-    const res = await net.fetch(url, { method: 'POST' })
-    if (!res.ok) return null
-    const data = (await res.json()) as { access_token: string; expires_in: number }
-    igdbToken = { accessToken: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 }
-    return igdbToken.accessToken
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(url, { method: 'POST', signal })
+      if (!res.ok) return null
+      const data = (await res.json()) as { access_token: string; expires_in: number }
+      igdbToken = { accessToken: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 }
+      return igdbToken.accessToken
+    })
   } catch {
     return null
   }
@@ -257,27 +280,32 @@ async function searchIgdbCover(name: string): Promise<IgdbCoverMatch | null> {
   const escaped = name.replace(/"/g, '\\"')
   const body = `search "${escaped}"; fields name,cover.image_id,genres.name; limit 5;`
   try {
-    const res = await net.fetch('https://api.igdb.com/v4/games', {
-      method: 'POST',
-      headers: {
-        'Client-ID': settings.igdbClientId,
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'text/plain'
-      },
-      body
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch('https://api.igdb.com/v4/games', {
+        method: 'POST',
+        headers: {
+          'Client-ID': settings.igdbClientId,
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'text/plain'
+        },
+        body,
+        signal
+      })
+      if (!res.ok) return null
+      const results = (await res.json()) as IgdbGameResult[]
+      const withCover = results.filter(
+        (r): r is IgdbGameResult & { cover: { image_id: string } } => !!r.cover?.image_id
+      )
+      if (withCover.length === 0) return null
+      const norm = normalizeGameName(name)
+      const exact = withCover.find((r) => normalizeGameName(r.name) === norm)
+      const chosen = exact ?? withCover[0]
+      return {
+        name: chosen.name,
+        imageId: chosen.cover.image_id,
+        genres: chosen.genres?.map((g) => g.name) ?? []
+      }
     })
-    if (!res.ok) return null
-    const results = (await res.json()) as IgdbGameResult[]
-    const withCover = results.filter((r): r is IgdbGameResult & { cover: { image_id: string } } => !!r.cover?.image_id)
-    if (withCover.length === 0) return null
-    const norm = normalizeGameName(name)
-    const exact = withCover.find((r) => normalizeGameName(r.name) === norm)
-    const chosen = exact ?? withCover[0]
-    return {
-      name: chosen.name,
-      imageId: chosen.cover.image_id,
-      genres: chosen.genres?.map((g) => g.name) ?? []
-    }
   } catch {
     return null
   }
@@ -285,11 +313,13 @@ async function searchIgdbCover(name: string): Promise<IgdbCoverMatch | null> {
 
 async function downloadImage(url: string, destPath: string): Promise<boolean> {
   try {
-    const res = await net.fetch(url)
-    if (!res.ok) return false
-    const buf = Buffer.from(await res.arrayBuffer())
-    await writeFileAtomic(destPath, buf)
-    return true
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(url, { signal })
+      if (!res.ok) return false
+      const buf = Buffer.from(await res.arrayBuffer())
+      await writeFileAtomic(destPath, buf)
+      return true
+    }, 20000)
   } catch {
     return false
   }
@@ -336,23 +366,26 @@ interface SteamMatch {
 
 async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
   try {
-    const res = await net.fetch(
-      `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(name)}&l=english&cc=us`
-    )
-    if (!res.ok) return null
-    const data = (await res.json()) as { items?: SteamSearchItem[] }
-    const item = data.items?.[0]
-    if (!item) return null
-    for (const variant of ['library_600x900_2x.jpg', 'library_600x900.jpg', 'header.jpg']) {
-      const url = `https://cdn.akamai.steamstatic.com/steam/apps/${item.id}/${variant}`
-      try {
-        const check = await net.fetch(url, { method: 'HEAD' })
-        if (check.ok) return { appid: item.id, coverUrl: url }
-      } catch {
-        // try next variant
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(
+        `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(name)}&l=english&cc=us`,
+        { signal }
+      )
+      if (!res.ok) return null
+      const data = (await res.json()) as { items?: SteamSearchItem[] }
+      const item = data.items?.[0]
+      if (!item) return null
+      for (const variant of ['library_600x900_2x.jpg', 'library_600x900.jpg', 'header.jpg']) {
+        const url = `https://cdn.akamai.steamstatic.com/steam/apps/${item.id}/${variant}`
+        try {
+          const check = await net.fetch(url, { method: 'HEAD', signal })
+          if (check.ok) return { appid: item.id, coverUrl: url }
+        } catch {
+          // try next variant
+        }
       }
-    }
-    return null
+      return null
+    })
   } catch {
     return null
   }
@@ -360,17 +393,20 @@ async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
 
 async function fetchSteamGenres(appid: number): Promise<string[]> {
   try {
-    const res = await net.fetch(
-      `https://store.steampowered.com/api/appdetails?appids=${appid}&l=english&filters=genres`
-    )
-    if (!res.ok) return []
-    const data = (await res.json()) as Record<
-      string,
-      { success: boolean; data?: { genres?: { description: string }[] } }
-    >
-    const entry = data[String(appid)]
-    if (!entry?.success) return []
-    return entry.data?.genres?.map((g) => g.description) ?? []
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(
+        `https://store.steampowered.com/api/appdetails?appids=${appid}&l=english&filters=genres`,
+        { signal }
+      )
+      if (!res.ok) return []
+      const data = (await res.json()) as Record<
+        string,
+        { success: boolean; data?: { genres?: { description: string }[] } }
+      >
+      const entry = data[String(appid)]
+      if (!entry?.success) return []
+      return entry.data?.genres?.map((g) => g.description) ?? []
+    })
   } catch {
     return []
   }
@@ -389,23 +425,27 @@ interface SteamAppDetailsResponse {
 
 async function fetchSteamAppDetails(appid: number): Promise<SteamGameDetails | null> {
   try {
-    const res = await net.fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`)
-    if (!res.ok) return null
-    const data = (await res.json()) as Record<string, { success: boolean; data?: SteamAppDetailsResponse }>
-    const entry = data[String(appid)]
-    if (!entry?.success || !entry.data) return null
-    const d = entry.data
-    return {
-      appid,
-      description: d.short_description ?? '',
-      headerImage: d.header_image ?? null,
-      screenshots: d.screenshots?.map((s) => s.path_full) ?? [],
-      releaseDate: d.release_date?.date ?? null,
-      developers: d.developers ?? [],
-      publishers: d.publishers ?? [],
-      genres: d.genres?.map((g) => g.description) ?? [],
-      metacriticScore: d.metacritic?.score ?? null
-    }
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`, {
+        signal
+      })
+      if (!res.ok) return null
+      const data = (await res.json()) as Record<string, { success: boolean; data?: SteamAppDetailsResponse }>
+      const entry = data[String(appid)]
+      if (!entry?.success || !entry.data) return null
+      const d = entry.data
+      return {
+        appid,
+        description: d.short_description ?? '',
+        headerImage: d.header_image ?? null,
+        screenshots: d.screenshots?.map((s) => s.path_full) ?? [],
+        releaseDate: d.release_date?.date ?? null,
+        developers: d.developers ?? [],
+        publishers: d.publishers ?? [],
+        genres: d.genres?.map((g) => g.description) ?? [],
+        metacriticScore: d.metacritic?.score ?? null
+      }
+    })
   } catch {
     return null
   }
@@ -499,14 +539,17 @@ interface RawgSearchItem {
 async function searchRawgMatch(name: string): Promise<{ imageUrl: string; genres: string[] } | null> {
   if (!settings.rawgApiKey) return null
   try {
-    const res = await net.fetch(
-      `https://api.rawg.io/api/games?key=${encodeURIComponent(settings.rawgApiKey)}&search=${encodeURIComponent(name)}&page_size=1`
-    )
-    if (!res.ok) return null
-    const data = (await res.json()) as { results?: RawgSearchItem[] }
-    const item = data.results?.[0]
-    if (!item?.background_image) return null
-    return { imageUrl: item.background_image, genres: item.genres?.map((g) => g.name) ?? [] }
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(
+        `https://api.rawg.io/api/games?key=${encodeURIComponent(settings.rawgApiKey)}&search=${encodeURIComponent(name)}&page_size=1`,
+        { signal }
+      )
+      if (!res.ok) return null
+      const data = (await res.json()) as { results?: RawgSearchItem[] }
+      const item = data.results?.[0]
+      if (!item?.background_image) return null
+      return { imageUrl: item.background_image, genres: item.genres?.map((g) => g.name) ?? [] }
+    })
   } catch {
     return null
   }
@@ -1194,24 +1237,27 @@ async function checkForUpdate(): Promise<UpdateCheckResult> {
   const currentVersion = app.getVersion()
   if (!UPDATE_REPO) return { available: false, currentVersion }
   try {
-    const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-      headers: { 'User-Agent': 'game-browser-update-check', Accept: 'application/vnd.github+json' }
+    return await withTimeout(async (signal) => {
+      const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+        headers: { 'User-Agent': 'game-browser-update-check', Accept: 'application/vnd.github+json' },
+        signal
+      })
+      if (!res.ok) return { available: false, currentVersion, error: `GitHub API returned ${res.status}` }
+      const release = (await res.json()) as GithubRelease
+      const latestVersion = release.tag_name.replace(/^v/i, '')
+      const asset = release.assets.find((a) => a.name.toLowerCase().endsWith('.exe'))
+      if (compareVersions(latestVersion, currentVersion) <= 0 || !asset) {
+        return { available: false, currentVersion, latestVersion }
+      }
+      return {
+        available: true,
+        currentVersion,
+        latestVersion,
+        notes: release.body ?? undefined,
+        assetUrl: asset.browser_download_url,
+        assetSize: asset.size
+      }
     })
-    if (!res.ok) return { available: false, currentVersion, error: `GitHub API returned ${res.status}` }
-    const release = (await res.json()) as GithubRelease
-    const latestVersion = release.tag_name.replace(/^v/i, '')
-    const asset = release.assets.find((a) => a.name.toLowerCase().endsWith('.exe'))
-    if (compareVersions(latestVersion, currentVersion) <= 0 || !asset) {
-      return { available: false, currentVersion, latestVersion }
-    }
-    return {
-      available: true,
-      currentVersion,
-      latestVersion,
-      notes: release.body ?? undefined,
-      assetUrl: asset.browser_download_url,
-      assetSize: asset.size
-    }
   } catch (e) {
     return { available: false, currentVersion, error: e instanceof Error ? e.message : String(e) }
   }
@@ -1227,18 +1273,26 @@ async function downloadUpdateAndRestart(
     return { ok: false, error: "Self-update only works from the portable .exe, not `npm run dev`." }
   }
   try {
-    const res = await net.fetch(assetUrl)
-    if (!res.ok) return { ok: false, error: `Download failed: HTTP ${res.status}` }
-    const buf = Buffer.from(await res.arrayBuffer())
-    if (assetSize > 0 && buf.length !== assetSize) {
-      return { ok: false, error: 'Downloaded file size does not match the release asset - try again.' }
-    }
-    const destPath = join(dir, `Game Browser ${version}.exe`)
-    await writeFileAtomic(destPath, buf)
-    const child = spawn(destPath, [], { detached: true, stdio: 'ignore' })
-    child.unref()
-    app.quit()
-    return { ok: true }
+    return await withTimeout(
+      async (signal) => {
+        const res = await net.fetch(assetUrl, { signal })
+        if (!res.ok) return { ok: false, error: `Download failed: HTTP ${res.status}` }
+        const buf = Buffer.from(await res.arrayBuffer())
+        if (assetSize > 0 && buf.length !== assetSize) {
+          return { ok: false, error: 'Downloaded file size does not match the release asset - try again.' }
+        }
+        const destPath = join(dir, `Game Browser ${version}.exe`)
+        await writeFileAtomic(destPath, buf)
+        const child = spawn(destPath, [], { detached: true, stdio: 'ignore' })
+        child.unref()
+        app.quit()
+        return { ok: true }
+      },
+      // The exe itself can be tens of MB - a much longer window than the
+      // default so a merely-slow connection doesn't get mistaken for a
+      // stalled one.
+      120000
+    )
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
