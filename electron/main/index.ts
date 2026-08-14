@@ -364,6 +364,21 @@ interface SteamMatch {
   coverUrl: string
 }
 
+// Steam's CDN doesn't have a single guaranteed image per app - some only
+// have header.jpg, not the taller library art. Tries the best option first.
+async function findSteamCoverUrl(appid: number, signal: AbortSignal): Promise<string | null> {
+  for (const variant of ['library_600x900_2x.jpg', 'library_600x900.jpg', 'header.jpg']) {
+    const url = `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/${variant}`
+    try {
+      const check = await net.fetch(url, { method: 'HEAD', signal })
+      if (check.ok) return url
+    } catch {
+      // try next variant
+    }
+  }
+  return null
+}
+
 async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
   try {
     return await withTimeout(async (signal) => {
@@ -375,16 +390,9 @@ async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
       const data = (await res.json()) as { items?: SteamSearchItem[] }
       const item = data.items?.[0]
       if (!item) return null
-      for (const variant of ['library_600x900_2x.jpg', 'library_600x900.jpg', 'header.jpg']) {
-        const url = `https://cdn.akamai.steamstatic.com/steam/apps/${item.id}/${variant}`
-        try {
-          const check = await net.fetch(url, { method: 'HEAD', signal })
-          if (check.ok) return { appid: item.id, coverUrl: url }
-        } catch {
-          // try next variant
-        }
-      }
-      return null
+      const coverUrl = await findSteamCoverUrl(item.id, signal)
+      if (!coverUrl) return null
+      return { appid: item.id, coverUrl }
     })
   } catch {
     return null
@@ -498,15 +506,33 @@ async function hasLocalScreenshot(appid: number): Promise<boolean> {
 // while a previous sweep is still running since each game is skipped once
 // its files exist on disk, so overlapping sweeps just do redundant cache
 // checks rather than duplicate downloads.
+const SCREENSHOT_SWEEP_CONCURRENCY = 4
+const SCREENSHOT_SWEEP_DELAY_MS = 800
+
 async function sweepMissingScreenshots(): Promise<void> {
   const targets = games.filter((g) => g.steamAppId !== null)
-  for (const g of targets) {
-    const appid = g.steamAppId
-    if (appid === null || (await hasLocalScreenshot(appid))) continue
-    const details = await fetchSteamAppDetails(appid)
-    if (details) await localizeSteamImages(appid, details)
-    await new Promise((r) => setTimeout(r, 1500))
+  let nextIndex = 0
+
+  // A fixed pool of workers pulling from a shared cursor, rather than one
+  // Promise.all over the whole list, so only SCREENSHOT_SWEEP_CONCURRENCY
+  // requests are ever in flight at once regardless of library size - each
+  // worker still paces its own requests SCREENSHOT_SWEEP_DELAY_MS apart to
+  // stay reasonably polite to Steam's API while running several times
+  // faster than the old single-file-at-a-time version.
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = nextIndex++
+      if (i >= targets.length) return
+      const appid = targets[i].steamAppId
+      if (appid === null) continue
+      if (await hasLocalScreenshot(appid)) continue
+      const details = await fetchSteamAppDetails(appid)
+      if (details) await localizeSteamImages(appid, details)
+      await new Promise((r) => setTimeout(r, SCREENSHOT_SWEEP_DELAY_MS))
+    }
   }
+
+  await Promise.all(Array.from({ length: SCREENSHOT_SWEEP_CONCURRENCY }, () => worker()))
 }
 
 async function fetchSteamMetadataForGame(game: Game, needsCover: boolean): Promise<boolean> {
@@ -528,6 +554,21 @@ async function fetchSteamMetadataForGame(game: Game, needsCover: boolean): Promi
     }
   }
   return changed
+}
+
+// Used when the user manually sets/changes a game's Steam ID in the Edit
+// dialog - unlike fetchSteamMetadataForGame, this trusts the given appid
+// completely and re-fetches unconditionally (overwriting any existing
+// cover/genres, even ones a name-based match had already filled in), since
+// setting the ID is an explicit correction of whatever was auto-detected.
+async function applySteamAppId(game: Game, appid: number): Promise<void> {
+  const coverUrl = await withTimeout((signal) => findSteamCoverUrl(appid, signal)).catch(() => null)
+  if (coverUrl) {
+    const dest = join(coversDir, `${game.id}.jpg`)
+    if (await downloadImage(coverUrl, dest)) game.coverPath = dest
+  }
+  const genres = await fetchSteamGenres(appid)
+  if (genres.length > 0) game.genres = genres
 }
 
 interface RawgSearchItem {
@@ -1492,10 +1533,16 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     'games:update',
-    async (_e, id: string, patch: Partial<Pick<Game, 'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds'>>) => {
+    async (
+      _e,
+      id: string,
+      patch: Partial<Pick<Game, 'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId'>>
+    ) => {
       const game = games.find((g) => g.id === id)
       if (!game) return null
+      const settingNewAppId = typeof patch.steamAppId === 'number' && patch.steamAppId !== game.steamAppId
       Object.assign(game, patch)
+      if (settingNewAppId) await applySteamAppId(game, patch.steamAppId as number)
       await saveLibrary()
       broadcastLibrary()
       return game

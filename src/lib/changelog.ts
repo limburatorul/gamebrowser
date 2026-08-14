@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.0',
+    changes: [
+      'The background screenshot download now runs 4 games at a time instead of one at a time, so it catches up several times faster.',
+      "New: Steam ID field in the Edit dialog — set it to pull the cover and genres from that exact Steam store page, overriding whatever the automatic name match picked (also accepts a pasted store.steampowered.com/app/… URL).",
+      'Settings is now split into Appearance, Backup & Restore, and Automation tabs instead of one long scrolling page.',
+      'Backup list in Settings now also refreshes right after you change the backup folder, not just after Backup Now.'
+    ]
+  },
+  {
     version: '1.15.2',
     changes: [
       'Fix: the background screenshot download could get permanently stuck on a single slow/stalled connection and silently stop making progress for the rest of the library — every network request in the app now times out instead of potentially hanging forever.'

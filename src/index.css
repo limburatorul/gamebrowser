@@ -1181,6 +1181,33 @@ select {
   color: var(--text-0);
 }
 
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.settings-tabs button {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-2);
+  padding: 8px 4px 10px;
+  margin-right: 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-tabs button:hover {
+  color: var(--text-0);
+}
+
+.settings-tabs button.active {
+  color: var(--text-0);
+  border-bottom-color: var(--accent);
+}
+
 .settings-section {
   margin: 14px 0 8px;
   font-size: 13px;
