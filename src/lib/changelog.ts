@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.15.1',
+    changes: [
+      "Fix: checking for updates from About and finding you're already up to date showed that message behind the About window instead of in front of it."
+    ]
+  },
+  {
     version: '1.15.0',
     changes: [
       'The four separate "Import Steam/Epic/GOG/Ubisoft" buttons are now one "Import ▾" dropdown, freeing up a lot of top bar width — the window fits on 1080p monitors again.',
