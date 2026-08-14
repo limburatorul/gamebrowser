@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.15.0',
+    changes: [
+      'The four separate "Import Steam/Epic/GOG/Ubisoft" buttons are now one "Import ▾" dropdown, freeing up a lot of top bar width — the window fits on 1080p monitors again.',
+      "Fix: the game title in the Game Details panel was rendering underneath the top bar."
+    ]
+  },
+  {
     version: '1.14.2',
     changes: [
       "Fix: the enlarged screenshot view was still visually confined to the Game Details panel's area even without a CSS transform trapping it - now portaled directly to the window root, so it and its nav/close buttons always center over the whole app."

@@ -1777,11 +1777,13 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1920,
     height: 1080,
-    // Bumped for the new "Import Ubisoft" button - estimated, not measured
-    // live via CDP like the previous bumps (no way to do that in this
-    // session). Re-measure with getBoundingClientRect if the toolbar still
-    // looks cut off at this width.
-    minWidth: 2000,
+    // Lowered now that the four separate "Import X" buttons collapsed into
+    // one "Import ▾" dropdown, freeing up most of the width the previous
+    // bump accounted for - so the window fits on 1080p monitors again.
+    // Still an estimate, not a live CDP measurement (no way to do that in
+    // this session) - re-measure with getBoundingClientRect if the toolbar
+    // still looks cut off.
+    minWidth: 1500,
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,

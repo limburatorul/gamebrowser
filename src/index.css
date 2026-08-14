@@ -203,7 +203,10 @@ select {
   border-left: 1px solid var(--border);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px;
+  /* Top padding matches .sidebar/.game-scroll: the topbar is
+     position:absolute (removed from .app's flex flow), so every sibling
+     of .body needs its own clearance or its content starts underneath it. */
+  padding: 68px 16px 16px;
   transition: width 220ms ease, padding 220ms ease;
 }
 
@@ -1501,6 +1504,50 @@ select {
 }
 
 /* Context menu */
+.import-menu-wrapper {
+  position: relative;
+}
+
+.import-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.import-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 21;
+  min-width: 180px;
+  background: rgba(23, 24, 27, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.import-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: var(--text-0);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.import-menu-item:hover {
+  background: var(--accent-dim);
+}
+
 .context-menu-overlay {
   position: fixed;
   inset: 0;
