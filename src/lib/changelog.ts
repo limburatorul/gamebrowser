@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.14.1',
+    changes: [
+      'Fix: the old exe is now retried a couple more times shortly after an update instead of only at the next full restart, for when it was still locked by the just-replaced process.',
+      "Fix: Settings' Save/Cancel buttons no longer sit glued to the field above them.",
+      'Fix: the Game Details panel now shrinks the game grid instead of covering part of it, and the enlarged screenshot view is centered over the whole window again (with working nav buttons) instead of being trapped inside the panel.'
+    ]
+  },
+  {
     version: '1.14.0',
     changes: [
       'New: Ubisoft Connect import — detects installed titles, with a dedicated "Ubisoft" sidebar filter, sync, and uninstall support, just like Steam/Epic/GOG.',

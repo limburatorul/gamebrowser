@@ -1836,6 +1836,14 @@ if (gotSingleInstanceLock) {
     void syncPlatformLibraries().then(() => sweepMissingScreenshots())
     void maybeRunScheduledBackup()
     void cleanupOldPortableExes()
+    // The just-replaced old instance may still hold its exe file locked for
+    // a moment after spawning the new one and calling app.quit() (which only
+    // *schedules* shutdown) - the immediate sweep above often loses that
+    // race right after an update. A couple of delayed retries catch it
+    // within this same session instead of leaving the old file until the
+    // user happens to relaunch again.
+    setTimeout(() => void cleanupOldPortableExes(), 5000)
+    setTimeout(() => void cleanupOldPortableExes(), 20000)
     // Cheap periodic re-check rather than scheduling exactly at the interval
     // boundary - correctly picks up backupEnabled/backupFolder/interval
     // changes made at runtime without needing to reset a timer.

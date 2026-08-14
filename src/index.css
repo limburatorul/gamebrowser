@@ -197,24 +197,29 @@ select {
 }
 
 .details-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 3;
   width: 400px;
+  flex-shrink: 0;
   background: var(--bg-1);
   border-left: 1px solid var(--border);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
-  transform: translateX(0);
-  transition: transform 220ms ease;
+  transition: width 220ms ease, padding 220ms ease;
 }
 
+/* Animating width (not transform) so the game grid actually reflows/shrinks
+   alongside it via flexbox, instead of the panel overlaying and hiding
+   games behind it. This also keeps the panel free of an active `transform`,
+   which matters because a transformed ancestor becomes the containing block
+   for `position: fixed` descendants - the screenshot lightbox rendered
+   inside this panel would otherwise be trapped to the panel's box instead
+   of centering over the whole window. */
 .details-panel-hidden {
-  transform: translateX(100%);
-  pointer-events: none;
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border-left-width: 0;
+  overflow-y: hidden;
 }
 
 .details-panel-header {
@@ -1001,6 +1006,8 @@ select {
   justify-content: flex-end;
   gap: 8px;
   margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .whats-new-modal {
