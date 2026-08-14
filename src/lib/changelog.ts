@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.14.2',
+    changes: [
+      "Fix: the enlarged screenshot view was still visually confined to the Game Details panel's area even without a CSS transform trapping it - now portaled directly to the window root, so it and its nav/close buttons always center over the whole app."
+    ]
+  },
+  {
     version: '1.14.1',
     changes: [
       'Fix: the old exe is now retried a couple more times shortly after an update instead of only at the next full restart, for when it was still locked by the just-replaced process.',
