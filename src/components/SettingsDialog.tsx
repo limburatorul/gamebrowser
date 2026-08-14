@@ -322,6 +322,10 @@ export default function SettingsDialog({
               </button>
             </div>
 
+            {!backupFolder && (
+              <p className="settings-note">Choose a backup folder above to start making backups.</p>
+            )}
+
             {backupFolder && backupsError && (
               <p className="settings-note backup-list-error">Could not read the backup folder: {backupsError}</p>
             )}

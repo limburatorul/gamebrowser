@@ -431,31 +431,40 @@ interface SteamAppDetailsResponse {
   metacritic?: { score: number }
 }
 
-async function fetchSteamAppDetails(appid: number): Promise<SteamGameDetails | null> {
+interface SteamAppDetailsFetch {
+  details: SteamGameDetails | null
+  rateLimited: boolean
+}
+
+async function fetchSteamAppDetails(appid: number): Promise<SteamAppDetailsFetch> {
   try {
     return await withTimeout(async (signal) => {
       const res = await net.fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`, {
         signal
       })
-      if (!res.ok) return null
+      if (res.status === 429) return { details: null, rateLimited: true }
+      if (!res.ok) return { details: null, rateLimited: false }
       const data = (await res.json()) as Record<string, { success: boolean; data?: SteamAppDetailsResponse }>
       const entry = data[String(appid)]
-      if (!entry?.success || !entry.data) return null
+      if (!entry?.success || !entry.data) return { details: null, rateLimited: false }
       const d = entry.data
       return {
-        appid,
-        description: d.short_description ?? '',
-        headerImage: d.header_image ?? null,
-        screenshots: d.screenshots?.map((s) => s.path_full) ?? [],
-        releaseDate: d.release_date?.date ?? null,
-        developers: d.developers ?? [],
-        publishers: d.publishers ?? [],
-        genres: d.genres?.map((g) => g.description) ?? [],
-        metacriticScore: d.metacritic?.score ?? null
+        details: {
+          appid,
+          description: d.short_description ?? '',
+          headerImage: d.header_image ?? null,
+          screenshots: d.screenshots?.map((s) => s.path_full) ?? [],
+          releaseDate: d.release_date?.date ?? null,
+          developers: d.developers ?? [],
+          publishers: d.publishers ?? [],
+          genres: d.genres?.map((g) => g.description) ?? [],
+          metacriticScore: d.metacritic?.score ?? null
+        },
+        rateLimited: false
       }
     })
   } catch {
-    return null
+    return { details: null, rateLimited: false }
   }
 }
 
@@ -506,8 +515,14 @@ async function hasLocalScreenshot(appid: number): Promise<boolean> {
 // while a previous sweep is still running since each game is skipped once
 // its files exist on disk, so overlapping sweeps just do redundant cache
 // checks rather than duplicate downloads.
-const SCREENSHOT_SWEEP_CONCURRENCY = 4
-const SCREENSHOT_SWEEP_DELAY_MS = 800
+const SCREENSHOT_SWEEP_CONCURRENCY = 2
+const SCREENSHOT_SWEEP_DELAY_MS = 1200
+const SCREENSHOT_SWEEP_RATE_LIMIT_BACKOFF_MS = 60000
+
+// Shared across all workers in a sweep (and across concurrent sweep calls):
+// once Steam responds 429 to anyone, everyone backs off together instead of
+// each worker independently hammering it again on its own next turn.
+let steamRateLimitedUntil = 0
 
 async function sweepMissingScreenshots(): Promise<void> {
   const targets = games.filter((g) => g.steamAppId !== null)
@@ -517,8 +532,10 @@ async function sweepMissingScreenshots(): Promise<void> {
   // Promise.all over the whole list, so only SCREENSHOT_SWEEP_CONCURRENCY
   // requests are ever in flight at once regardless of library size - each
   // worker still paces its own requests SCREENSHOT_SWEEP_DELAY_MS apart to
-  // stay reasonably polite to Steam's API while running several times
-  // faster than the old single-file-at-a-time version.
+  // stay reasonably polite to Steam's API while running faster than the old
+  // single-file-at-a-time version. A game skipped here because of a 429
+  // isn't retried within this run (its files still don't exist, so the next
+  // sweep - next startup or next Steam import - picks it up again).
   async function worker(): Promise<void> {
     for (;;) {
       const i = nextIndex++
@@ -526,8 +543,16 @@ async function sweepMissingScreenshots(): Promise<void> {
       const appid = targets[i].steamAppId
       if (appid === null) continue
       if (await hasLocalScreenshot(appid)) continue
-      const details = await fetchSteamAppDetails(appid)
-      if (details) await localizeSteamImages(appid, details)
+
+      const waitMs = steamRateLimitedUntil - Date.now()
+      if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs))
+
+      const result = await fetchSteamAppDetails(appid)
+      if (result.rateLimited) {
+        steamRateLimitedUntil = Date.now() + SCREENSHOT_SWEEP_RATE_LIMIT_BACKOFF_MS
+        continue
+      }
+      if (result.details) await localizeSteamImages(appid, result.details)
       await new Promise((r) => setTimeout(r, SCREENSHOT_SWEEP_DELAY_MS))
     }
   }
@@ -1664,7 +1689,13 @@ function registerIpcHandlers(): void {
       return { ok: false, error: 'Delete from disk is only available for manually added games.' }
     }
     try {
-      await fs.rm(game.installDir, { recursive: true, force: true })
+      // Windows-specific: a recursive rmdir can transiently fail with
+      // ENOTEMPTY/EBUSY if AV or Explorer still has a brief handle open on
+      // something inside the tree (thumbnail cache, a file that was just
+      // running) even though nothing is actually still using it a moment
+      // later - maxRetries/retryDelay makes Node retry the whole operation
+      // instead of failing on the first attempt.
+      await fs.rm(game.installDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) }
     }
@@ -1769,9 +1800,9 @@ function registerIpcHandlers(): void {
       if (!match) return null
       appid = match.appid
     }
-    const details = await fetchSteamAppDetails(appid)
-    if (!details) return null
-    return localizeSteamImages(appid, details)
+    const result = await fetchSteamAppDetails(appid)
+    if (!result.details) return null
+    return localizeSteamImages(appid, result.details)
   })
 
   ipcMain.handle('categories:getAll', async (): Promise<Category[]> => categories)

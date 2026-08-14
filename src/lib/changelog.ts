@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.1',
+    changes: [
+      "Fix: Delete from Disk could fail with \"directory not empty\" on Windows if a file inside was still briefly held open (AV scan, Explorer) — now retries automatically instead of failing on the first attempt.",
+      'Fix: the background screenshot download now detects being rate-limited by Steam and backs off for a minute instead of silently failing game after game — also dialed back concurrency/pacing since running 4 at once likely triggered the rate limit in the first place.',
+      "Fix: the backup list section could show absolutely nothing in some states — now always shows something (a folder prompt, an error, \"no backups yet\", or the list)."
+    ]
+  },
+  {
     version: '1.16.0',
     changes: [
       'The background screenshot download now runs 4 games at a time instead of one at a time, so it catches up several times faster.',
