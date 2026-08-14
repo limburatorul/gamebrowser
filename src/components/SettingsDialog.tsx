@@ -106,7 +106,7 @@ export default function SettingsDialog({
 
   return (
     <div className="modal-overlay">
-      <div className="modal">
+      <div className="modal settings-modal">
         <h2>Settings</h2>
 
         <div className="settings-tabs">

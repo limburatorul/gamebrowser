@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.2',
+    changes: [
+      'Fix: the screenshot download backoff now stops the whole run on the first Steam rate-limit response instead of grinding through the rest of the list with a wait on every single one, and waits longer each time it happens again instead of retrying the same minute-long window against a block that likely lasts longer.',
+      'Fix: the Settings window now has a fixed size instead of resizing itself every time you switch tabs.'
+    ]
+  },
+  {
     version: '1.16.1',
     changes: [
       "Fix: Delete from Disk could fail with \"directory not empty\" on Windows if a file inside was still briefly held open (AV scan, Explorer) — now retries automatically instead of failing on the first attempt.",

@@ -930,6 +930,15 @@ select {
   overflow-y: auto;
 }
 
+.settings-modal {
+  /* Fixed instead of max-height: with tabs, each one has a different amount
+     of content - max-height let the whole modal grow/shrink to fit whatever
+     tab was active, visibly resizing the window on every tab switch. A
+     fixed height plus the existing overflow-y:auto keeps it constant and
+     just scrolls internally for the taller tabs. */
+  height: 80vh;
+}
+
 .modal-small {
   width: 340px;
 }

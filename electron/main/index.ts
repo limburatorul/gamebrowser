@@ -517,41 +517,51 @@ async function hasLocalScreenshot(appid: number): Promise<boolean> {
 // checks rather than duplicate downloads.
 const SCREENSHOT_SWEEP_CONCURRENCY = 2
 const SCREENSHOT_SWEEP_DELAY_MS = 1200
-const SCREENSHOT_SWEEP_RATE_LIMIT_BACKOFF_MS = 60000
+const SCREENSHOT_SWEEP_RATE_LIMIT_BASE_BACKOFF_MS = 60000
+const SCREENSHOT_SWEEP_RATE_LIMIT_MAX_BACKOFF_MS = 15 * 60000
 
-// Shared across all workers in a sweep (and across concurrent sweep calls):
-// once Steam responds 429 to anyone, everyone backs off together instead of
-// each worker independently hammering it again on its own next turn.
+// Shared across sweep calls: once Steam responds 429, every worker (and any
+// later sweep - next startup, next Steam import) waits out this window
+// before trying again. Grows exponentially on repeated 429s instead of
+// retrying the same fixed 60s wait indefinitely against a block that may
+// well last longer than that, and resets back to the base once a request
+// actually succeeds.
 let steamRateLimitedUntil = 0
+let steamRateLimitBackoffMs = SCREENSHOT_SWEEP_RATE_LIMIT_BASE_BACKOFF_MS
 
 async function sweepMissingScreenshots(): Promise<void> {
+  if (Date.now() < steamRateLimitedUntil) return
   const targets = games.filter((g) => g.steamAppId !== null)
   let nextIndex = 0
+  let rateLimitHit = false
 
   // A fixed pool of workers pulling from a shared cursor, rather than one
   // Promise.all over the whole list, so only SCREENSHOT_SWEEP_CONCURRENCY
   // requests are ever in flight at once regardless of library size - each
   // worker still paces its own requests SCREENSHOT_SWEEP_DELAY_MS apart to
   // stay reasonably polite to Steam's API while running faster than the old
-  // single-file-at-a-time version. A game skipped here because of a 429
-  // isn't retried within this run (its files still don't exist, so the next
-  // sweep - next startup or next Steam import - picks it up again).
+  // single-file-at-a-time version. The *first* 429 stops this run entirely
+  // (see rateLimitHit) rather than working through the rest of the list -
+  // if Steam is blocking, every other request in this run would fail too,
+  // so there's no point burning through them one by one; the next sweep
+  // trigger picks up where this left off once the backoff window passes.
   async function worker(): Promise<void> {
     for (;;) {
+      if (rateLimitHit) return
       const i = nextIndex++
       if (i >= targets.length) return
       const appid = targets[i].steamAppId
       if (appid === null) continue
       if (await hasLocalScreenshot(appid)) continue
 
-      const waitMs = steamRateLimitedUntil - Date.now()
-      if (waitMs > 0) await new Promise((r) => setTimeout(r, waitMs))
-
       const result = await fetchSteamAppDetails(appid)
       if (result.rateLimited) {
-        steamRateLimitedUntil = Date.now() + SCREENSHOT_SWEEP_RATE_LIMIT_BACKOFF_MS
-        continue
+        rateLimitHit = true
+        steamRateLimitBackoffMs = Math.min(steamRateLimitBackoffMs * 2, SCREENSHOT_SWEEP_RATE_LIMIT_MAX_BACKOFF_MS)
+        steamRateLimitedUntil = Date.now() + steamRateLimitBackoffMs
+        return
       }
+      steamRateLimitBackoffMs = SCREENSHOT_SWEEP_RATE_LIMIT_BASE_BACKOFF_MS
       if (result.details) await localizeSteamImages(appid, result.details)
       await new Promise((r) => setTimeout(r, SCREENSHOT_SWEEP_DELAY_MS))
     }
