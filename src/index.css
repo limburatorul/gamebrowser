@@ -129,6 +129,17 @@ select {
   outline: none;
 }
 
+/* A <select> sizes itself to its widest option, so the genre/tag filters grew
+   with whatever the longest genre or user tag happened to be - which made the
+   topbar's minimum width unbounded (measured: 1538px window with two 199px
+   selects, i.e. past the 1500px minWidth). Capping them pins that minimum at
+   ~1460px no matter how long the names get; the open dropdown still lists
+   every option in full. */
+.topbar-controls .select {
+  max-width: 160px;
+  text-overflow: ellipsis;
+}
+
 .view-toggle {
   display: flex;
   border: 1px solid var(--border);
@@ -652,17 +663,27 @@ select {
 .game-tile {
   cursor: pointer;
   border-radius: var(--radius);
-  padding: 4px;
+  /* Wider on the left/right than top/bottom on purpose - the highlight reads
+     as a frame around the cover, and it looks too thin at an even 4px. The
+     tile is border-box with a fixed inline width, so this eats into the cover
+     rather than widening the tile; row height in GameGrid is unaffected. */
+  padding: 4px 9px;
   border: 2px solid transparent;
 }
 
-.game-tile:hover {
-  background: var(--bg-2);
+/* Glass instead of the old flat --bg-2 fill: same treatment as the topbar and
+   details bar, tunable from Settings > Appearance. The literal rgb() is
+   --bg-2 (#1e2024) spelled out, since a hex custom property can't be fed to
+   rgba() without a separate --*-rgb var. */
+.game-tile:hover,
+.game-tile.selected {
+  background: rgba(30, 32, 36, var(--tile-highlight-alpha, 0.55));
+  backdrop-filter: blur(var(--tile-highlight-blur, 16px)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--tile-highlight-blur, 16px)) saturate(1.2);
 }
 
 .game-tile.selected {
   border-color: var(--accent);
-  background: var(--bg-2);
 }
 
 .game-tile-cover {
@@ -802,12 +823,15 @@ select {
   border: 1px solid transparent;
 }
 
-.list-row:hover {
-  background: var(--bg-2);
+/* Same glass highlight as the grid tiles, so the two view modes match. */
+.list-row:hover,
+.list-row.selected {
+  background: rgba(30, 32, 36, var(--tile-highlight-alpha, 0.55));
+  backdrop-filter: blur(var(--tile-highlight-blur, 16px)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--tile-highlight-blur, 16px)) saturate(1.2);
 }
 
 .list-row.selected {
-  background: var(--bg-2);
   border-color: var(--accent);
 }
 
@@ -1345,6 +1369,44 @@ select {
   color: var(--text-2);
   font-size: 11.5px;
   line-height: 1.5;
+}
+
+.app-icon-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.app-icon-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 84px;
+  padding: 8px 4px;
+  background: var(--bg-2);
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-1);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.app-icon-choice:hover {
+  border-color: var(--text-2);
+}
+
+.app-icon-choice.active {
+  border-color: var(--accent);
+  color: var(--text-0);
+}
+
+.app-icon-choice img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: contain;
 }
 
 .scan-progress .modal-sub {

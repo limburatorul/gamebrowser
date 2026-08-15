@@ -14,6 +14,10 @@ export interface Game {
   tags: string[]
   rating: number | null
   categoryIds: string[]
+  // Keeps counting playtime, but leaves the game out of every aggregate:
+  // the sidebar's most-played list, the library total, and the dashboard.
+  // Toggling it back off restores the untouched number.
+  excludeFromPlaytime: boolean
   steamAppId: number | null
   epicAppName: string | null
   gogProductId: string | null
@@ -141,9 +145,20 @@ export interface AppInfo {
   dataPath: string
 }
 
+export interface AppIconChoice {
+  id: string
+  label: string
+  // Absolute path on disk - the renderer renders it through the local-file://
+  // protocol for the Settings previews, the main process feeds it to
+  // win.setIcon(). One set of files, no duplicated copies to keep in sync.
+  path: string
+}
+
 export interface GameApi {
   getAll(): Promise<Game[]>
   getAppInfo(): Promise<AppInfo>
+  getIconChoices(): Promise<AppIconChoice[]>
+  setAppIcon(id: string): Promise<void>
   openDataFolder(): Promise<void>
   addManual(): Promise<Game | null>
   scanFolder(): Promise<GameCandidate[]>
@@ -152,7 +167,12 @@ export interface GameApi {
   launch(id: string): Promise<void>
   update(
     id: string,
-    patch: Partial<Pick<Game, 'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId'>>
+    patch: Partial<
+      Pick<
+        Game,
+        'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId' | 'excludeFromPlaytime'
+      >
+    >
   ): Promise<Game | null>
   setCover(id: string): Promise<Game | null>
   setExePath(id: string): Promise<Game | null>

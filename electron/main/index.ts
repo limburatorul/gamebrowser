@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell, nativeImage } from 'electron'
 import { join, dirname, basename, extname } from 'path'
 import { promises as fs, type Dirent } from 'fs'
 import { randomUUID } from 'crypto'
@@ -19,13 +19,32 @@ import type {
   LibrarySyncEvent,
   Category,
   SteamGameDetails,
-  ScreenshotSweepResult
+  ScreenshotSweepResult,
+  AppIconChoice
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
 import { findGogGames, type GogGame } from './gog'
 
 const execFileAsync = promisify(execFile)
+
+// Window/taskbar icons the user can pick between in Settings > Appearance.
+// They deliberately live in resources/, NOT build/: build/ is electron-builder's
+// buildResources directory, which it excludes from the packaged app no matter
+// what build.files says. resources/app-icons/* is named in build.files instead
+// (that list only ships out/** plus explicitly-named extras), same trick the
+// sql.js .wasm needed. "default" is a copy of the artwork the .exe carries.
+const APP_ICON_CHOICES: { id: string; label: string; file: string }[] = [
+  { id: 'default', label: 'Default', file: 'default.png' },
+  { id: 'ufo', label: 'UFO', file: 'ufo.png' },
+  { id: 'planet', label: 'Planet', file: 'planet.png' },
+  { id: 'rocket', label: 'Rocket', file: 'rocket.png' }
+]
+
+function appIconPath(file: string): string {
+  // app.getAppPath() resolves correctly in both dev and packaged builds.
+  return join(app.getAppPath(), 'resources', 'app-icons', file)
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local-file', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
@@ -90,6 +109,7 @@ async function loadLibrary(): Promise<void> {
       tags: g.tags ?? [],
       rating: g.rating ?? null,
       categoryIds: g.categoryIds ?? [],
+      excludeFromPlaytime: g.excludeFromPlaytime ?? false,
       steamAppId: g.steamAppId ?? null,
       epicAppName: g.epicAppName ?? null,
       gogProductId: g.gogProductId ?? null,
@@ -999,6 +1019,7 @@ async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]
       tags: [],
       rating: null,
       categoryIds: [],
+      excludeFromPlaytime: false,
       steamAppId: g.appId,
       epicAppName: null,
       gogProductId: null,
@@ -1050,6 +1071,7 @@ async function addNewEpicGames(installed: EpicManifest[]): Promise<Game[]> {
       tags: [],
       rating: null,
       categoryIds: [],
+      excludeFromPlaytime: false,
       steamAppId: null,
       epicAppName: m.appName,
       gogProductId: null,
@@ -1087,6 +1109,7 @@ async function addNewGogGames(installed: GogGame[]): Promise<Game[]> {
       tags: [],
       rating: null,
       categoryIds: [],
+      excludeFromPlaytime: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: g.productId,
@@ -1164,6 +1187,7 @@ async function addNewUbisoftGames(installed: InstalledUbisoftGame[]): Promise<Ga
       tags: [],
       rating: null,
       categoryIds: [],
+      excludeFromPlaytime: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -1483,6 +1507,7 @@ function registerIpcHandlers(): void {
       tags: [],
       rating: null,
       categoryIds: [],
+      excludeFromPlaytime: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -1548,6 +1573,7 @@ function registerIpcHandlers(): void {
         tags: [],
         rating: null,
         categoryIds: [],
+        excludeFromPlaytime: false,
         steamAppId: null,
         epicAppName: null,
         gogProductId: null,
@@ -1651,7 +1677,12 @@ function registerIpcHandlers(): void {
     async (
       _e,
       id: string,
-      patch: Partial<Pick<Game, 'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId'>>
+      patch: Partial<
+        Pick<
+          Game,
+          'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId' | 'excludeFromPlaytime'
+        >
+      >
     ) => {
       const game = games.find((g) => g.id === id)
       if (!game) return null
@@ -1862,6 +1893,24 @@ function registerIpcHandlers(): void {
     dataPath: userDataPath
   }))
 
+  ipcMain.handle(
+    'app:getIconChoices',
+    async (): Promise<AppIconChoice[]> =>
+      APP_ICON_CHOICES.map((c) => ({ id: c.id, label: c.label, path: appIconPath(c.file) }))
+  )
+
+  // The choice itself lives in the renderer's uiPrefs (localStorage), like
+  // every other Appearance setting, so the renderer replays it on startup.
+  ipcMain.handle('app:setIcon', async (_e, id: string): Promise<void> => {
+    const choice = APP_ICON_CHOICES.find((c) => c.id === id) ?? APP_ICON_CHOICES[0]
+    const image = nativeImage.createFromPath(appIconPath(choice.file))
+    // A missing/unreadable file yields an empty image, and handing that to
+    // setIcon blanks the window icon entirely - better to leave whatever is
+    // already there.
+    if (image.isEmpty()) return
+    for (const win of BrowserWindow.getAllWindows()) win.setIcon(image)
+  })
+
   ipcMain.handle('app:openDataFolder', async () => {
     await shell.openPath(userDataPath)
   })
@@ -2001,12 +2050,14 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1920,
     height: 1080,
-    // Lowered now that the four separate "Import X" buttons collapsed into
-    // one "Import ▾" dropdown, freeing up most of the width the previous
-    // bump accounted for - so the window fits on 1080p monitors again.
-    // Still an estimate, not a live CDP measurement (no way to do that in
-    // this session) - re-measure with getBoundingClientRect if the toolbar
-    // still looks cut off.
+    // Measured live over CDP, not estimated: shrinking the viewport until
+    // anything in the topbar clips puts the real floor at 1444px of viewport
+    // (1460px of window, +16px chrome) in the worst case - both the genre and
+    // the tag filter visible, each capped at 160px by `.topbar-controls
+    // .select` in index.css. 1500 leaves ~40px of headroom over that.
+    // Re-measure the same way whenever the TopBar gains or loses a control,
+    // and keep that select cap - without it this floor grows with the longest
+    // genre/tag name and no fixed number here can be right.
     minWidth: 1500,
     minHeight: 640,
     show: false,

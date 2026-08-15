@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.0',
+    changes: [
+      'New: pick the app icon in Settings → Appearance — three space-themed alternatives alongside the default. It changes the window and taskbar icon straight away; the icon on the .exe file itself stays the default, since that one is baked in at build time.',
+      'New: "Ignore Playtime" in the right-click menu on a game — leaves it out of the most-played list in the sidebar, the total playtime, and the dashboard, for games whose hours you would rather not count. Playtime keeps being recorded, so switching it back off restores the number untouched.',
+      'The window title now shows the version number after the app name.',
+      'The highlight behind a hovered or selected game card is now translucent and blurred like the top and details bars, slightly wider on the left and right, and both its transparency and blur are adjustable in Settings → Appearance.',
+      'Fix: the genre and tag filter dropdowns used to stretch to fit the longest genre or tag name, which could push the toolbar wider than the window could go and cut off the buttons on the right. They now have a fixed maximum width (the full names are still shown when the dropdown is open).'
+    ]
+  },
+  {
     version: '1.18.0',
     changes: [
       "The background screenshot cache now covers every game in your library, not just ones imported from Steam — manually added games get matched to a Steam store page by name (same matching already used for covers), and that match is remembered so it doesn't need to search again next time. Wrong match? Correct or clear it any time via the Steam ID field in the Edit dialog."
