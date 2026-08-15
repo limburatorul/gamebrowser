@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.2',
+    changes: [
+      'Fix: the game details panel on the right ran underneath the bar at the bottom of the window, so the last screenshots were partly hidden behind it with no way to scroll them clear. The panel now ends where the bar begins.',
+      'Scrollbars are slimmer and no longer almost the same colour as the panels they sit on.'
+    ]
+  },
+  {
     version: '1.19.1',
     changes: [
       'The app has a new icon — a rocket, with a properly transparent background so it sits cleanly on any taskbar or desktop.',
