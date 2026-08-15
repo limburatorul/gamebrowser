@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.25.1',
+    changes: [
+      'Fix: newer Steam games could end up with screenshots but no cover and no genres. Steam has moved its artwork to addresses that cannot be guessed, so the old approach came back empty-handed even though the game was found — covers for those now come from the store page itself.',
+      "Fix: a game with no artwork available at all no longer loses its genres and its Steam link as well. The Steam ID is remembered from the first successful match, so later lookups don't have to search by name again."
+    ]
+  },
+  {
     version: '1.25.0',
     changes: [
       'The window now remembers its size, position and whether it was maximised, and comes back the same way. It used to open at 1920×1080 in the default spot every single time. A position on a monitor that is no longer connected is ignored, so unplugging a screen cannot leave the window somewhere you cannot reach it.',

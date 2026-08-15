@@ -391,12 +391,15 @@ interface SteamSearchItem {
 
 interface SteamMatch {
   appid: number
-  coverUrl: string
+  /** Null when Steam has the app but no usable image for it. */
+  coverUrl: string | null
 }
 
 // Steam's CDN doesn't have a single guaranteed image per app - some only
 // have header.jpg, not the taller library art. Tries the best option first.
 async function findSteamCoverUrl(appid: number, signal: AbortSignal): Promise<string | null> {
+  // Classic layout first: it's the only one carrying the tall 600x900 library
+  // art, which is what the grid actually wants.
   for (const variant of ['library_600x900_2x.jpg', 'library_600x900.jpg', 'header.jpg']) {
     const url = `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/${variant}`
     try {
@@ -406,7 +409,25 @@ async function findSteamCoverUrl(appid: number, signal: AbortSignal): Promise<st
       // try next variant
     }
   }
-  return null
+
+  // Newer apps aren't served from that path at all - their assets live under
+  // store_item_assets/… with a content hash in the URL, which can't be guessed.
+  // Verified on appid 4512570: every classic variant 404s, while the store API
+  // hands back a working header.jpg. Only header exists on the new path (the
+  // 600x900 variants 404 there too), so this is a wide cover rather than a
+  // tall one - still far better than the game having none at all.
+  try {
+    const res = await net.fetch(
+      `https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`,
+      { signal }
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as Record<string, { success?: boolean; data?: { header_image?: string } }>
+    const header = data[String(appid)]?.data?.header_image
+    return typeof header === 'string' && header ? header : null
+  } catch {
+    return null
+  }
 }
 
 async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
@@ -420,8 +441,10 @@ async function searchSteamMatch(name: string): Promise<SteamMatch | null> {
       const data = (await res.json()) as { items?: SteamSearchItem[] }
       const item = data.items?.[0]
       if (!item) return null
+      // A missing cover used to abort the whole match, which also threw away
+      // the genres and the resolved appid - so a game Steam knows perfectly
+      // well ended up with nothing at all. The appid is the valuable part.
       const coverUrl = await findSteamCoverUrl(item.id, signal)
-      if (!coverUrl) return null
       return { appid: item.id, coverUrl }
     })
   } catch {
@@ -683,7 +706,14 @@ async function fetchSteamMetadataForGame(game: Game, needsCover: boolean): Promi
   const match = await searchSteamMatch(game.name)
   if (!match) return false
   let changed = false
-  if (needsCover) {
+  // Remember the resolved appid even when there's no cover - it saves every
+  // later lookup (details panel, screenshots, genres) from name-searching
+  // again, and lets a cover be picked up once Steam has one.
+  if (game.steamAppId === null) {
+    game.steamAppId = match.appid
+    changed = true
+  }
+  if (needsCover && match.coverUrl) {
     const dest = join(coversDir, `${game.id}.jpg`)
     if (await downloadImage(match.coverUrl, dest)) {
       game.coverPath = dest
