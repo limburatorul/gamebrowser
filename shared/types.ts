@@ -60,6 +60,9 @@ export interface Settings {
   backupFolder: string
   backupEnabled: boolean
   backupIntervalHours: number
+  // How many archives to keep in the backup folder; older ones are deleted
+  // after each successful backup. 0 means keep everything.
+  backupKeepCount: number
   lastBackupAt: string | null
   librarySyncEnabled: boolean
 }
@@ -68,6 +71,7 @@ export interface BackupPrefs {
   backupFolder: string
   backupEnabled: boolean
   backupIntervalHours: number
+  backupKeepCount: number
 }
 
 export interface BackupResult {
@@ -180,6 +184,7 @@ export interface GameApi {
   onGameRunningChanged(cb: (payload: { id: string; running: boolean }) => void): () => void
   pickBackupFolder(): Promise<string | null>
   saveBackupPrefs(prefs: BackupPrefs): Promise<Settings>
+  onBackupProgress(cb: (progress: ScanProgress | null) => void): () => void
   backupNow(): Promise<BackupResult>
   restoreFromBackup(): Promise<BackupResult | null>
   listBackups(): Promise<BackupListResult>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { BackupEntry, BackupPrefs, Settings } from '@shared/types'
+import type { BackupEntry, BackupPrefs, ScanProgress, Settings } from '@shared/types'
 import type { UiPrefs } from '../lib/uiPrefs'
 import ColorPicker from './ColorPicker'
 import { ACCENT_PRESETS, SIDEBAR_PRESETS } from '../lib/color'
@@ -17,6 +17,7 @@ interface Props {
   onRestoreBackup: () => Promise<void>
   onRestoreFromPath: (path: string) => Promise<void>
   backupBusy: boolean
+  backupProgress: ScanProgress | null
   onSweepScreenshotsNow: () => Promise<void>
   sweepingScreenshots: boolean
 }
@@ -56,6 +57,7 @@ export default function SettingsDialog({
   onRestoreBackup,
   onRestoreFromPath,
   backupBusy,
+  backupProgress,
   onSweepScreenshotsNow,
   sweepingScreenshots
 }: Props): JSX.Element {
@@ -66,6 +68,7 @@ export default function SettingsDialog({
   const [backupFolder, setBackupFolder] = useState(initial.backupFolder)
   const [backupEnabled, setBackupEnabled] = useState(initial.backupEnabled)
   const [backupIntervalHours, setBackupIntervalHours] = useState(initial.backupIntervalHours)
+  const [backupKeepCount, setBackupKeepCount] = useState(initial.backupKeepCount)
   const [librarySyncEnabled, setLibrarySyncEnabled] = useState(initial.librarySyncEnabled)
   const [backups, setBackups] = useState<BackupEntry[]>([])
   const [backupsError, setBackupsError] = useState<string | null>(null)
@@ -101,10 +104,13 @@ export default function SettingsDialog({
   }
 
   function persistBackupPrefs(patch: Partial<BackupPrefs>): void {
-    const next: BackupPrefs = { backupFolder, backupEnabled, backupIntervalHours, ...patch }
+    const next: BackupPrefs = { backupFolder, backupEnabled, backupIntervalHours, backupKeepCount, ...patch }
     setBackupFolder(next.backupFolder)
     setBackupEnabled(next.backupEnabled)
     setBackupIntervalHours(next.backupIntervalHours)
+    setBackupKeepCount(next.backupKeepCount)
+    // Lowering the keep count prunes immediately in main, so the list has to
+    // be re-read rather than assumed unchanged.
     void onSaveBackupPrefs(next).then(refreshBackups)
   }
 
@@ -336,11 +342,35 @@ export default function SettingsDialog({
               <span className="settings-slider-value">{formatHours(backupIntervalHours)}</span>
             </div>
 
+            <div className="settings-slider-row">
+              <span className="settings-slider-label">Keep the newest</span>
+              <input
+                type="range"
+                min={0}
+                max={20}
+                step={1}
+                value={backupKeepCount}
+                onChange={(e) => persistBackupPrefs({ backupKeepCount: Number(e.target.value) })}
+              />
+              <span className="settings-slider-value">
+                {backupKeepCount === 0 ? 'all' : backupKeepCount}
+              </span>
+            </div>
+
             <p className="settings-note">
-              Saved as a single .zip archive (max compression) containing your library, settings, covers, icons, and
-              cached Steam screenshots. Last backup: {formatLastBackup(initial.lastBackupAt)}. If the app
-              wasn&apos;t running when a backup was due, it runs on the next startup instead.
+              Saved as a single .zip archive containing your library, settings, covers, icons, and cached Steam
+              screenshots. Older archives beyond the number above are deleted after each backup — with screenshots
+              cached these run to several GB each, so keeping every one adds up quickly. Last backup:{' '}
+              {formatLastBackup(initial.lastBackupAt)}. If the app wasn&apos;t running when a backup was due, it runs
+              on the next startup instead.
             </p>
+
+            {backupProgress && (
+              <p className="settings-note backup-progress">
+                Backing up… {backupProgress.current.toLocaleString()} / {backupProgress.total.toLocaleString()} files
+                {backupProgress.currentName ? ` — ${backupProgress.currentName}` : ''}
+              </p>
+            )}
 
             <div className="backup-actions-row">
               <button className="btn" type="button" disabled={backupBusy} onClick={() => void onRestoreBackup()}>
@@ -497,6 +527,7 @@ export default function SettingsDialog({
                 backupFolder,
                 backupEnabled,
                 backupIntervalHours,
+                backupKeepCount,
                 lastBackupAt: initial.lastBackupAt,
                 librarySyncEnabled
               })

@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.20.0',
+    changes: [
+      'New: backups are now limited to the newest few archives, set in Settings → Backup & Restore (default 5, or "all" to keep everything). Nothing deleted old backups before, so with periodic backup on, the folder grew forever — and now that a backup includes cached screenshots, that is several GB per run.',
+      'Backup Now shows progress while it works instead of just going quiet.',
+      'Leftover part-files from an interrupted backup are cleaned up automatically.'
+    ]
+  },
+  {
     version: '1.19.3',
     changes: [
       'Fix: backups failed with "Array buffer allocation failed" once the cached screenshots pushed the data folder past a couple of gigabytes — the whole archive was being assembled in memory before anything was written to disk. It is now written out as it goes, so the size of your library no longer matters. A 2.8 GB backup here now takes about 12 seconds and around 140 MB of memory.',

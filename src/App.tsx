@@ -54,6 +54,7 @@ export default function App(): JSX.Element {
   const [savingEdit, setSavingEdit] = useState(false)
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null)
   const [coverFetchProgress, setCoverFetchProgress] = useState<ScanProgress | null>(null)
+  const [backupProgress, setBackupProgress] = useState<ScanProgress | null>(null)
   const [infoMessage, setInfoMessage] = useState<{ title: string; message: string } | null>(null)
   const [syncToasts, setSyncToasts] = useState<SyncToast[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -64,6 +65,7 @@ export default function App(): JSX.Element {
     backupFolder: '',
     backupEnabled: false,
     backupIntervalHours: 24,
+    backupKeepCount: 5,
     lastBackupAt: null,
     librarySyncEnabled: true
   })
@@ -133,6 +135,7 @@ export default function App(): JSX.Element {
     })
     const offScanProgress = window.api.onScanProgress(setScanProgress)
     const offCoverFetchProgress = window.api.onCoverFetchProgress(setCoverFetchProgress)
+    const offBackupProgress = window.api.onBackupProgress(setBackupProgress)
     return () => {
       offLibrary()
       offLibrarySynced()
@@ -140,6 +143,7 @@ export default function App(): JSX.Element {
       offRunning()
       offScanProgress()
       offCoverFetchProgress()
+      offBackupProgress()
     }
   }, [])
 
@@ -987,6 +991,7 @@ export default function App(): JSX.Element {
           onRestoreBackup={handleRestoreBackup}
           onRestoreFromPath={handleRestoreFromPath}
           backupBusy={busy}
+          backupProgress={backupProgress}
           onSweepScreenshotsNow={handleSweepScreenshotsNow}
           sweepingScreenshots={sweepingScreenshots}
         />

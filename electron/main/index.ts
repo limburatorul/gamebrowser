@@ -75,6 +75,7 @@ let settings: Settings = {
   backupFolder: '',
   backupEnabled: false,
   backupIntervalHours: 24,
+  backupKeepCount: 5,
   lastBackupAt: null,
   librarySyncEnabled: true
 }
@@ -155,6 +156,10 @@ function broadcastScanProgress(progress: ScanProgress | null): void {
 
 function broadcastCoverFetchProgress(progress: ScanProgress | null): void {
   for (const win of BrowserWindow.getAllWindows()) win.webContents.send('cover-fetch:progress', progress)
+}
+
+function broadcastBackupProgress(progress: ScanProgress | null): void {
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send('backup:progress', progress)
 }
 
 const MIME_TYPES: Record<string, string> = {
@@ -1291,6 +1296,35 @@ async function repairIgnoredExePaths(): Promise<void> {
   }
 }
 
+const BACKUP_NAME_RE = /^game-browser-backup-.*\.zip$/i
+
+// Nothing used to delete old archives, so with scheduled backups on, the
+// folder grew forever - and once the screenshot cache landed that meant a
+// ~3GB file per run. Keeps the newest `backupKeepCount`, deletes the rest.
+// Also sweeps `.part` files, which a backup interrupted mid-write leaves.
+async function pruneOldBackups(): Promise<void> {
+  const keep = settings.backupKeepCount
+  if (!settings.backupFolder) return
+  try {
+    const entries = await fs.readdir(settings.backupFolder, { withFileTypes: true })
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.zip.part')) {
+        await fs.rm(join(settings.backupFolder, entry.name), { force: true }).catch(() => undefined)
+      }
+    }
+    if (keep <= 0) return
+    const zips = entries.filter((e) => e.isFile() && BACKUP_NAME_RE.test(e.name)).map((e) => e.name)
+    // The timestamp in the name sorts chronologically as plain text, so this
+    // needs no stat() calls and can't be thrown off by mtimes changing.
+    zips.sort((a, b) => b.localeCompare(a))
+    for (const name of zips.slice(keep)) {
+      await fs.rm(join(settings.backupFolder, name), { force: true }).catch(() => undefined)
+    }
+  } catch {
+    // A backup folder we can't read isn't worth failing a good backup over.
+  }
+}
+
 async function runBackup(): Promise<BackupResult> {
   if (!settings.backupFolder) return { ok: false, error: 'No backup folder set.', settings }
   try {
@@ -1306,13 +1340,17 @@ async function runBackup(): Promise<BackupResult> {
         { zipPath: 'icons', fsPath: iconsDir, isDir: true },
         { zipPath: 'screenshots', fsPath: screenshotsDir, isDir: true }
       ],
-      dest
+      dest,
+      (current, total, currentName) => broadcastBackupProgress({ current, total, currentName })
     )
     settings.lastBackupAt = new Date().toISOString()
     await saveSettingsToDisk()
+    await pruneOldBackups()
     return { ok: true, path: dest, settings }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e), settings }
+  } finally {
+    broadcastBackupProgress(null)
   }
 }
 
@@ -1961,9 +1999,15 @@ function registerIpcHandlers(): void {
       backupEnabled: !!prefs.backupEnabled,
       backupIntervalHours: Number.isFinite(prefs.backupIntervalHours)
         ? Math.min(720, Math.max(1, Math.round(prefs.backupIntervalHours)))
-        : settings.backupIntervalHours
+        : settings.backupIntervalHours,
+      backupKeepCount: Number.isFinite(prefs.backupKeepCount)
+        ? Math.min(50, Math.max(0, Math.round(prefs.backupKeepCount)))
+        : settings.backupKeepCount
     }
     await saveSettingsToDisk()
+    // Lowering the limit should take effect straight away, not only after the
+    // next backup happens to run.
+    await pruneOldBackups()
     return settings
   })
 
