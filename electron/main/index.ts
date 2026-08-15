@@ -22,12 +22,14 @@ import type {
   ScreenshotSweepResult,
   SteamPlaytimeSyncResult,
   MetadataSweepResult,
-  DiskSizeSweepResult
+  DiskSizeSweepResult,
+  TrainerScanResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
 import { findGogGames, type GogGame } from './gog'
 import { readSteamPlaytime } from './steamPlaytime'
+import { scanTrainerFolder, matchTrainer, trainerSearchUrl } from './trainers'
 
 const execFileAsync = promisify(execFile)
 
@@ -66,6 +68,10 @@ const libraryFile = join(userDataPath, 'library.json')
 const coversDir = join(userDataPath, 'covers')
 const iconsDir = join(userDataPath, 'icons')
 const screenshotsDir = join(userDataPath, 'screenshots')
+// Matched trainers are copied in here so the set travels with the library and
+// gets picked up by backups, instead of depending on wherever they were
+// originally downloaded still existing.
+const trainersDir = join(userDataPath, 'trainers')
 const settingsFile = join(userDataPath, 'settings.json')
 const categoriesFile = join(userDataPath, 'categories.json')
 
@@ -80,6 +86,7 @@ let settings: Settings = {
   backupEnabled: false,
   backupIntervalHours: 24,
   backupKeepCount: 5,
+  trainerFolder: '',
   lastBackupAt: null,
   librarySyncEnabled: true
 }
@@ -98,6 +105,7 @@ async function loadLibrary(): Promise<void> {
       excludeFromPlaytime: g.excludeFromPlaytime ?? false,
       installSizeBytes: g.installSizeBytes ?? null,
       sizeMeasuredAt: g.sizeMeasuredAt ?? null,
+      trainerPath: g.trainerPath ?? null,
       steamAppId: g.steamAppId ?? null,
       epicAppName: g.epicAppName ?? null,
       gogProductId: g.gogProductId ?? null,
@@ -1261,6 +1269,7 @@ async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]
       excludeFromPlaytime: false,
       installSizeBytes: null,
       sizeMeasuredAt: null,
+      trainerPath: null,
       steamAppId: g.appId,
       epicAppName: null,
       gogProductId: null,
@@ -1315,6 +1324,7 @@ async function addNewEpicGames(installed: EpicManifest[]): Promise<Game[]> {
       excludeFromPlaytime: false,
       installSizeBytes: null,
       sizeMeasuredAt: null,
+      trainerPath: null,
       steamAppId: null,
       epicAppName: m.appName,
       gogProductId: null,
@@ -1355,6 +1365,7 @@ async function addNewGogGames(installed: GogGame[]): Promise<Game[]> {
       excludeFromPlaytime: false,
       installSizeBytes: null,
       sizeMeasuredAt: null,
+      trainerPath: null,
       steamAppId: null,
       epicAppName: null,
       gogProductId: g.productId,
@@ -1435,6 +1446,7 @@ async function addNewUbisoftGames(installed: InstalledUbisoftGame[]): Promise<Ga
       excludeFromPlaytime: false,
       installSizeBytes: null,
       sizeMeasuredAt: null,
+      trainerPath: null,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -1648,6 +1660,76 @@ async function syncSteamPlaytime(): Promise<SteamPlaytimeSyncResult> {
   }
 }
 
+/**
+ * Matches the user's own trainer files against the library and copies the ones
+ * that match into userData, so the set is self-contained, survives the source
+ * folder being cleaned out, and rides along in backups.
+ *
+ * Nothing is fetched from the internet here - see the note on
+ * `trainerSearchUrl`; the app opens the site in the user's browser instead.
+ */
+async function scanTrainers(): Promise<TrainerScanResult> {
+  const folder = settings.trainerFolder
+  const result: TrainerScanResult = { folder, trainerFiles: 0, matched: 0, unmatchedFiles: 0 }
+  if (!folder) return { ...result, error: 'No trainer folder set.' }
+
+  try {
+    await fs.mkdir(trainersDir, { recursive: true })
+    const trainers = await scanTrainerFolder(folder)
+    result.trainerFiles = trainers.length
+
+    const usedFiles = new Set<string>()
+    let changed = false
+    for (const game of games) {
+      const match = matchTrainer(game.name, trainers)
+      if (!match) {
+        // A trainer that was matched before but whose file is gone should stop
+        // being advertised; one still present in userData stays put.
+        if (game.trainerPath) {
+          try {
+            await fs.access(game.trainerPath)
+          } catch {
+            game.trainerPath = null
+            changed = true
+          }
+        }
+        continue
+      }
+      usedFiles.add(match.path)
+
+      const dest = join(trainersDir, match.fileName)
+      try {
+        // Copy only when it isn't already there with the same size, so repeat
+        // scans don't rewrite 85MB of executables every time.
+        let needsCopy = true
+        try {
+          const [src, existing] = await Promise.all([fs.stat(match.path), fs.stat(dest)])
+          needsCopy = src.size !== existing.size
+        } catch {
+          needsCopy = true
+        }
+        if (needsCopy) await copyFileAtomic(match.path, dest)
+        if (game.trainerPath !== dest) {
+          game.trainerPath = dest
+          changed = true
+        }
+        result.matched++
+      } catch {
+        // couldn't copy this one - leave the game without a trainer
+      }
+    }
+
+    result.unmatchedFiles = trainers.length - usedFiles.size
+    if (changed) {
+      await saveLibrary()
+      broadcastLibrary()
+    }
+    return result
+  } catch (e) {
+    return { ...result, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 async function runBackup(): Promise<BackupResult> {
   if (!settings.backupFolder) return { ok: false, error: 'No backup folder set.', settings }
   try {
@@ -1661,7 +1743,8 @@ async function runBackup(): Promise<BackupResult> {
         { zipPath: 'categories.json', fsPath: categoriesFile },
         { zipPath: 'covers', fsPath: coversDir, isDir: true },
         { zipPath: 'icons', fsPath: iconsDir, isDir: true },
-        { zipPath: 'screenshots', fsPath: screenshotsDir, isDir: true }
+        { zipPath: 'screenshots', fsPath: screenshotsDir, isDir: true },
+        { zipPath: 'trainers', fsPath: trainersDir, isDir: true }
       ],
       dest,
       (current, total, currentName) => broadcastBackupProgress({ current, total, currentName })
@@ -1852,6 +1935,7 @@ function registerIpcHandlers(): void {
       excludeFromPlaytime: false,
       installSizeBytes: null,
       sizeMeasuredAt: null,
+      trainerPath: null,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -1920,6 +2004,7 @@ function registerIpcHandlers(): void {
         excludeFromPlaytime: false,
         installSizeBytes: null,
         sizeMeasuredAt: null,
+        trainerPath: null,
         steamAppId: null,
         epicAppName: null,
         gogProductId: null,
@@ -2280,6 +2365,31 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('sizes:measureNow', async (): Promise<DiskSizeSweepResult> => sweepDiskSizes(true))
 
+  ipcMain.handle('trainers:pickFolder', async (): Promise<string | null> => {
+    const result = await showOpenDialog({ properties: ['openDirectory'], title: 'Select your trainers folder' })
+    if (result.canceled || result.filePaths.length === 0) return null
+    settings = { ...settings, trainerFolder: result.filePaths[0] }
+    await saveSettingsToDisk()
+    return settings.trainerFolder
+  })
+
+  ipcMain.handle('trainers:scan', async (): Promise<TrainerScanResult> => scanTrainers())
+
+  ipcMain.handle('trainers:launch', async (_e, id: string): Promise<{ ok: boolean; error?: string }> => {
+    const game = games.find((g) => g.id === id)
+    if (!game?.trainerPath) return { ok: false, error: 'No trainer for this game.' }
+    // openPath rather than spawn: trainers frequently ask for elevation, and
+    // this lets Windows put up its own prompt instead of failing silently.
+    const error = await shell.openPath(game.trainerPath)
+    return error ? { ok: false, error } : { ok: true }
+  })
+
+  ipcMain.handle('trainers:openSearch', async (_e, id: string): Promise<void> => {
+    const game = games.find((g) => g.id === id)
+    if (!game) return
+    await shell.openExternal(trainerSearchUrl(game.name))
+  })
+
   ipcMain.handle('categories:getAll', async (): Promise<Category[]> => categories)
 
   ipcMain.handle('categories:create', async (_e, name: string): Promise<Category> => {
@@ -2431,6 +2541,7 @@ if (gotSingleInstanceLock) {
     await fs.mkdir(coversDir, { recursive: true })
     await fs.mkdir(iconsDir, { recursive: true })
     await fs.mkdir(screenshotsDir, { recursive: true })
+    await fs.mkdir(trainersDir, { recursive: true })
     await loadLibrary()
     await loadSettings()
     await loadCategories()
