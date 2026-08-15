@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.21.0',
+    changes: [
+      'New: your real Steam playtime is now part of the library. Steam keeps its own record of how long you have played each game, and that is merged in on launch for anything with a Steam ID — so the most-played list, the dashboard and sorting by playtime finally reflect all of your hours instead of only the sessions started from here. Nothing is double-counted: Steam already counts games launched from this app, so the larger of the two figures wins rather than the two being added together.',
+      'Last-played dates come across from Steam too, which fills in the Recently Played filter.',
+      'Settings → Automation has a "Sync Playtime Now" button if you want to pull it in without restarting.'
+    ]
+  },
+  {
     version: '1.20.0',
     changes: [
       'New: backups are now limited to the newest few archives, set in Settings → Backup & Restore (default 5, or "all" to keep everything). Nothing deleted old backups before, so with periodic backup on, the folder grew forever — and now that a backup includes cached screenshots, that is several GB per run.',

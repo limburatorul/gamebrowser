@@ -11,6 +11,7 @@ import type {
   UpdateCheckResult,
   ViewMode
 } from '@shared/types'
+import { formatPlaytime } from './lib/localFile'
 import Sidebar, { type LibraryFilter } from './components/Sidebar'
 import TopBar from './components/TopBar'
 import GameGrid from './components/GameGrid'
@@ -92,6 +93,7 @@ export default function App(): JSX.Element {
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
+  const [syncingPlaytime, setSyncingPlaytime] = useState(false)
   const [updateDownloading, setUpdateDownloading] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [whatsNew, setWhatsNew] = useState<{ title: string; entries: ChangelogEntry[] } | null>(null)
@@ -468,6 +470,32 @@ export default function App(): JSX.Element {
       setInfoMessage({ title: 'Screenshot Cache', message: lines.join(' ') })
     } finally {
       setSweepingScreenshots(false)
+    }
+  }
+
+  async function handleSyncSteamPlaytime(): Promise<void> {
+    setSyncingPlaytime(true)
+    try {
+      const r = await window.api.syncSteamPlaytimeNow()
+      if (r.error) {
+        setInfoMessage({ title: 'Steam Playtime', message: `Couldn't read Steam's playtime: ${r.error}` })
+        return
+      }
+      if (!r.steamFound) {
+        setInfoMessage({ title: 'Steam Playtime', message: "Steam doesn't appear to be installed on this PC." })
+        return
+      }
+      const lines = [
+        `Steam has playtime recorded for ${r.steamAppsWithPlaytime} games; ${r.matchableGames} of yours carry a Steam ID.`
+      ]
+      lines.push(
+        r.updated > 0
+          ? `Updated ${r.updated}. Your library now totals ${formatPlaytime(r.totalPlaytimeSeconds)}.`
+          : 'Everything was already up to date.'
+      )
+      setInfoMessage({ title: 'Steam Playtime', message: lines.join(' ') })
+    } finally {
+      setSyncingPlaytime(false)
     }
   }
 
@@ -994,6 +1022,8 @@ export default function App(): JSX.Element {
           backupProgress={backupProgress}
           onSweepScreenshotsNow={handleSweepScreenshotsNow}
           sweepingScreenshots={sweepingScreenshots}
+          onSyncSteamPlaytime={handleSyncSteamPlaytime}
+          syncingPlaytime={syncingPlaytime}
         />
       )}
       {aboutOpen && (

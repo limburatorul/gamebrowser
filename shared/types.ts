@@ -122,6 +122,19 @@ export interface ScreenshotSweepResult {
   retryAfter: string | null
 }
 
+export interface SteamPlaytimeSyncResult {
+  /** False when Steam isn't installed, or its local config couldn't be read. */
+  steamFound: boolean
+  /** Apps Steam has a playtime record for, across every account on the PC. */
+  steamAppsWithPlaytime: number
+  /** Library games carrying a steamAppId, i.e. the ones that can be matched. */
+  matchableGames: number
+  /** Games whose playtime or last-played was actually raised by this sync. */
+  updated: number
+  totalPlaytimeSeconds: number
+  error?: string
+}
+
 export interface LibrarySyncEvent {
   source: 'Steam' | 'Epic' | 'GOG' | 'Ubisoft'
   added: number
@@ -197,6 +210,7 @@ export interface GameApi {
   downloadUpdateAndRestart(assetUrl: string, assetSize: number, version: string): Promise<UpdateApplyResult>
   getSteamDetails(id: string): Promise<SteamGameDetails | null>
   sweepScreenshotsNow(): Promise<ScreenshotSweepResult>
+  syncSteamPlaytimeNow(): Promise<SteamPlaytimeSyncResult>
   getCategories(): Promise<Category[]>
   createCategory(name: string): Promise<Category>
   renameCategory(id: string, name: string): Promise<Category | null>

@@ -20,6 +20,8 @@ interface Props {
   backupProgress: ScanProgress | null
   onSweepScreenshotsNow: () => Promise<void>
   sweepingScreenshots: boolean
+  onSyncSteamPlaytime: () => Promise<void>
+  syncingPlaytime: boolean
 }
 
 type Tab = 'appearance' | 'backup' | 'automation'
@@ -59,7 +61,9 @@ export default function SettingsDialog({
   backupBusy,
   backupProgress,
   onSweepScreenshotsNow,
-  sweepingScreenshots
+  sweepingScreenshots,
+  onSyncSteamPlaytime,
+  syncingPlaytime
 }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('appearance')
   const [clientId, setClientId] = useState(initial.igdbClientId)
@@ -447,6 +451,22 @@ export default function SettingsDialog({
             </p>
             <button className="btn" type="button" disabled={sweepingScreenshots} onClick={() => void onSweepScreenshotsNow()}>
               {sweepingScreenshots ? 'Checking…' : 'Check Now'}
+            </button>
+
+            <h3 className="settings-section">Steam Playtime</h3>
+            <p className="settings-note">
+              Steam keeps its own record of how long you have played each game. On launch, that is merged into your
+              library for anything with a Steam ID, so the playtime list and dashboard reflect all of your time, not
+              only the sessions started from here. Steam&apos;s figure and the locally tracked one are never added
+              together — the larger of the two wins, since launching a Steam game from here is still counted by Steam.
+            </p>
+            <button
+              className="btn"
+              type="button"
+              disabled={syncingPlaytime}
+              onClick={() => void onSyncSteamPlaytime()}
+            >
+              {syncingPlaytime ? 'Syncing…' : 'Sync Playtime Now'}
             </button>
 
             <h3 className="settings-section">Auto Covers (IGDB)</h3>

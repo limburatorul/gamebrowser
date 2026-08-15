@@ -19,11 +19,13 @@ import type {
   LibrarySyncEvent,
   Category,
   SteamGameDetails,
-  ScreenshotSweepResult
+  ScreenshotSweepResult,
+  SteamPlaytimeSyncResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
 import { findGogGames, type GogGame } from './gog'
+import { readSteamPlaytime } from './steamPlaytime'
 
 const execFileAsync = promisify(execFile)
 
@@ -1325,6 +1327,68 @@ async function pruneOldBackups(): Promise<void> {
   }
 }
 
+/**
+ * Pulls Steam's own recorded playtime into the library. Without this, playtime
+ * only ever reflects launches made through this app, which for an imported
+ * library means the stat is close to meaningless.
+ *
+ * Values are merged with `max()`, never summed: launching a Steam game from
+ * here still goes through Steam, so Steam has already counted that session and
+ * adding the two would double it. Taking the larger also means a session Steam
+ * somehow missed isn't thrown away.
+ */
+async function syncSteamPlaytime(): Promise<SteamPlaytimeSyncResult> {
+  const matchable = games.filter((g) => g.steamAppId !== null)
+  const base: SteamPlaytimeSyncResult = {
+    steamFound: false,
+    steamAppsWithPlaytime: 0,
+    matchableGames: matchable.length,
+    updated: 0,
+    totalPlaytimeSeconds: 0
+  }
+  try {
+    const steamPath = await findSteamPath()
+    if (!steamPath) return base
+    const playtime = await readSteamPlaytime(steamPath)
+    base.steamFound = true
+    base.steamAppsWithPlaytime = playtime.size
+    if (playtime.size === 0) return base
+
+    let updated = 0
+    for (const game of matchable) {
+      const entry = playtime.get(game.steamAppId as number)
+      if (!entry) continue
+      let changed = false
+
+      const steamSeconds = entry.playtimeMinutes * 60
+      if (steamSeconds > game.playtimeSeconds) {
+        game.playtimeSeconds = steamSeconds
+        changed = true
+      }
+
+      if (entry.lastPlayedUnix) {
+        const steamLastPlayed = new Date(entry.lastPlayedUnix * 1000).toISOString()
+        if (!game.lastPlayed || steamLastPlayed > game.lastPlayed) {
+          game.lastPlayed = steamLastPlayed
+          changed = true
+        }
+      }
+
+      if (changed) updated++
+    }
+
+    base.updated = updated
+    base.totalPlaytimeSeconds = games.reduce((sum, g) => sum + g.playtimeSeconds, 0)
+    if (updated > 0) {
+      await saveLibrary()
+      broadcastLibrary()
+    }
+    return base
+  } catch (e) {
+    return { ...base, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 async function runBackup(): Promise<BackupResult> {
   if (!settings.backupFolder) return { ok: false, error: 'No backup folder set.', settings }
   try {
@@ -1947,6 +2011,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('screenshots:sweepNow', async (): Promise<ScreenshotSweepResult> => sweepMissingScreenshots())
 
+  ipcMain.handle('steam:syncPlaytime', async (): Promise<SteamPlaytimeSyncResult> => syncSteamPlaytime())
+
   ipcMain.handle('categories:getAll', async (): Promise<Category[]> => categories)
 
   ipcMain.handle('categories:create', async (_e, name: string): Promise<Category> => {
@@ -2117,7 +2183,13 @@ if (gotSingleInstanceLock) {
     registerIpcHandlers()
     createWindow()
     void repairIgnoredExePaths()
-    void syncPlatformLibraries().then(() => sweepMissingScreenshots())
+    // Playtime sync runs after the library sync so games imported on this
+    // launch already exist (and carry a steamAppId) by the time it looks.
+    // Gated by the same librarySyncEnabled preference as everything else that
+    // reconciles the library against a platform.
+    void syncPlatformLibraries()
+      .then(() => (settings.librarySyncEnabled ? syncSteamPlaytime() : undefined))
+      .then(() => sweepMissingScreenshots())
     void maybeRunScheduledBackup()
     void cleanupOldPortableExes()
     // The just-replaced old instance may still hold its exe file locked for
