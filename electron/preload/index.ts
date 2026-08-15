@@ -22,6 +22,7 @@ const api: GameApi = {
   getAll: () => ipcRenderer.invoke('games:getAll'),
   getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
+  openGameFolder: (id: string) => ipcRenderer.invoke('games:openFolder', id),
   addManual: () => ipcRenderer.invoke('games:addManual'),
   scanFolder: () => ipcRenderer.invoke('games:scanFolder'),
   onScanProgress: (cb: (progress: ScanProgress | null) => void) => {

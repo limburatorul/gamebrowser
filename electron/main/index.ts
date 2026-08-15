@@ -2428,6 +2428,20 @@ function registerIpcHandlers(): void {
     dataPath: userDataPath
   }))
 
+  // Reveals the game's own executable rather than just opening the folder, so
+  // with two copies of a game side by side it's obvious which one this entry
+  // actually points at.
+  ipcMain.handle('games:openFolder', async (_e, id: string): Promise<void> => {
+    const game = games.find((g) => g.id === id)
+    if (!game) return
+    try {
+      await fs.access(game.exePath)
+      shell.showItemInFolder(game.exePath)
+    } catch {
+      await shell.openPath(game.installDir)
+    }
+  })
+
   ipcMain.handle('app:openDataFolder', async () => {
     await shell.openPath(userDataPath)
   })

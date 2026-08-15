@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.26.0',
+    changes: [
+      'New: the bar at the bottom now shows where the game is installed, so when you have the same game twice — your own copy and the Steam one, or in two different places — you can tell which entry is which before deciding what to keep.',
+      'Clicking that path opens the folder in Explorer with the game\'s own executable highlighted. Long paths are shortened from the left, keeping the end visible, since that is the part that tells the copies apart.'
+    ]
+  },
+  {
     version: '1.25.1',
     changes: [
       'Fix: newer Steam games could end up with screenshots but no cover and no genres. Steam has moved its artwork to addresses that cannot be guessed, so the old approach came back empty-handed even though the game was found — covers for those now come from the store page itself.',

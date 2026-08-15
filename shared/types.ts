@@ -214,6 +214,7 @@ export interface GameApi {
   getAll(): Promise<Game[]>
   getAppInfo(): Promise<AppInfo>
   openDataFolder(): Promise<void>
+  openGameFolder(id: string): Promise<void>
   addManual(): Promise<Game | null>
   scanFolder(): Promise<GameCandidate[]>
   onScanProgress(cb: (progress: ScanProgress | null) => void): () => void

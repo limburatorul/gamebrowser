@@ -1031,6 +1031,33 @@ select {
   font-size: 13.5px;
 }
 
+/* Truncates on the left (direction: rtl) so the tail of the path stays
+   readable - "…\steamapps\common\Mafia Definitive Edition" tells you which
+   copy this is, while "W:\SteamLibrary\steam…" does not. The bidi isolate
+   keeps the leading drive letter from being reordered by the rtl context. */
+.details-path {
+  display: block;
+  max-width: 100%;
+  margin-top: 5px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: left;
+  direction: rtl;
+  unicode-bidi: isolate;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.details-path:hover {
+  color: var(--text-0);
+  text-decoration: underline;
+}
+
 .details-actions {
   display: flex;
   gap: 8px;

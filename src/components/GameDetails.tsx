@@ -11,6 +11,7 @@ interface Props {
   onLaunchTrainer: (id: string) => void
   onLaunchWithTrainer: (id: string) => void
   onFindTrainer: (id: string) => void
+  onOpenFolder: (id: string) => void
   onToggleFavorite: (id: string) => void
   onRate: (id: string, rating: number | null) => void
   onEdit: (id: string) => void
@@ -30,6 +31,7 @@ export default function GameDetails({
   onLaunchTrainer,
   onLaunchWithTrainer,
   onFindTrainer,
+  onOpenFolder,
   onToggleFavorite,
   onRate,
   onEdit,
@@ -52,6 +54,17 @@ export default function GameDetails({
           {game.installSizeBytes !== null && <span>Size: {formatSize(game.installSizeBytes)}</span>}
           <StarRating value={game.rating} onChange={(r) => onRate(game.id, r)} size="lg" />
         </div>
+        {/* Own line rather than another item in the meta row: paths are long
+            and would push everything else off the end. Ellipsised from the
+            left, since the tail (the game's own folder) is what distinguishes
+            a Steam copy from your own when both are in the library. */}
+        <button
+          className="details-path"
+          title={`${game.installDir}\nClick to open in Explorer`}
+          onClick={() => onOpenFolder(game.id)}
+        >
+          {game.installDir}
+        </button>
       </div>
       <div className="details-actions">
         <button className="btn btn-primary" onClick={() => onLaunch(game.id)} disabled={running}>

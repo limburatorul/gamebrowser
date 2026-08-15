@@ -812,6 +812,10 @@ export default function App(): JSX.Element {
     })
   }
 
+  function handleOpenGameFolder(id: string): void {
+    void window.api.openGameFolder(id)
+  }
+
   function handleFindTrainer(id: string): void {
     void window.api.openTrainerSearch(id)
   }
@@ -1119,6 +1123,7 @@ export default function App(): JSX.Element {
           onLaunchTrainer={handleLaunchTrainer}
           onLaunchWithTrainer={handleLaunchWithTrainer}
           onFindTrainer={handleFindTrainer}
+          onOpenFolder={handleOpenGameFolder}
           onToggleFavorite={handleToggleFavorite}
           onRate={handleRateGame}
           onEdit={handleEdit}
