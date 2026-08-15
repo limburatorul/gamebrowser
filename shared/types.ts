@@ -103,11 +103,13 @@ export interface SteamGameDetails {
 }
 
 export interface ScreenshotSweepResult {
-  totalSteamGames: number
+  totalGames: number
   alreadyCached: number
   attempted: number
   downloaded: number
+  matchedByName: number
   noStorePage: number
+  noMatch: number
   rateLimited: boolean
   retryAfter: string | null
 }

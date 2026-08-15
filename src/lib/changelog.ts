@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.18.0',
+    changes: [
+      "The background screenshot cache now covers every game in your library, not just ones imported from Steam — manually added games get matched to a Steam store page by name (same matching already used for covers), and that match is remembered so it doesn't need to search again next time. Wrong match? Correct or clear it any time via the Steam ID field in the Edit dialog."
+    ]
+  },
+  {
     version: '1.17.0',
     changes: [
       'New: "Check Now" button in Settings → Automation for the screenshot cache — shows exactly what\'s happening (how many are already cached, how many were checked just now, how many downloaded, and whether Steam is currently rate-limiting requests) instead of it being a silent background process with no visibility.'

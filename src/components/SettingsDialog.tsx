@@ -381,8 +381,9 @@ export default function SettingsDialog({
 
             <h3 className="settings-section">Screenshot Cache</h3>
             <p className="settings-note">
-              Steam screenshots for your library download gradually in the background (also retried automatically
-              every 15 minutes). If it seems stuck, check now to see exactly what&apos;s happening.
+              Steam screenshots for every game — including manually added ones, matched to a Steam store page by
+              name — download gradually in the background (also retried automatically every 15 minutes). If it
+              seems stuck, check now to see exactly what&apos;s happening.
             </p>
             <button className="btn" type="button" disabled={sweepingScreenshots} onClick={() => void onSweepScreenshotsNow()}>
               {sweepingScreenshots ? 'Checking…' : 'Check Now'}
