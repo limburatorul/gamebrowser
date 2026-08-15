@@ -7,5 +7,5 @@ Backup/
 *.zip
 *.exe
 # Scratch folder of generated icon-design candidates that keeps getting swept
-# into commits by accident. The ones actually shipped live in resources/app-icons.
+# into commits by accident. The icon actually shipped is build/icon.ico.
 /icons/
