@@ -18,7 +18,8 @@ import type {
   UpdateApplyResult,
   LibrarySyncEvent,
   Category,
-  SteamGameDetails
+  SteamGameDetails,
+  ScreenshotSweepResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -529,11 +530,31 @@ const SCREENSHOT_SWEEP_RATE_LIMIT_MAX_BACKOFF_MS = 15 * 60000
 let steamRateLimitedUntil = 0
 let steamRateLimitBackoffMs = SCREENSHOT_SWEEP_RATE_LIMIT_BASE_BACKOFF_MS
 
-async function sweepMissingScreenshots(): Promise<void> {
-  if (Date.now() < steamRateLimitedUntil) return
+// Result shape is shared with the renderer (shared/types.ts) so the manual
+// "Check Now" trigger (Settings > Automation) can show the user what
+// actually happened instead of the silent black box the automatic-only
+// version was - "left it running overnight, nothing downloaded" was
+// impossible to diagnose further without this.
+async function sweepMissingScreenshots(): Promise<ScreenshotSweepResult> {
   const targets = games.filter((g) => g.steamAppId !== null)
+  if (Date.now() < steamRateLimitedUntil) {
+    return {
+      totalSteamGames: targets.length,
+      alreadyCached: 0,
+      attempted: 0,
+      downloaded: 0,
+      noStorePage: 0,
+      rateLimited: true,
+      retryAfter: new Date(steamRateLimitedUntil).toISOString()
+    }
+  }
+
   let nextIndex = 0
   let rateLimitHit = false
+  let alreadyCached = 0
+  let attempted = 0
+  let downloaded = 0
+  let noStorePage = 0
 
   // A fixed pool of workers pulling from a shared cursor, rather than one
   // Promise.all over the whole list, so only SCREENSHOT_SWEEP_CONCURRENCY
@@ -552,8 +573,12 @@ async function sweepMissingScreenshots(): Promise<void> {
       if (i >= targets.length) return
       const appid = targets[i].steamAppId
       if (appid === null) continue
-      if (await hasLocalScreenshot(appid)) continue
+      if (await hasLocalScreenshot(appid)) {
+        alreadyCached++
+        continue
+      }
 
+      attempted++
       const result = await fetchSteamAppDetails(appid)
       if (result.rateLimited) {
         rateLimitHit = true
@@ -562,12 +587,27 @@ async function sweepMissingScreenshots(): Promise<void> {
         return
       }
       steamRateLimitBackoffMs = SCREENSHOT_SWEEP_RATE_LIMIT_BASE_BACKOFF_MS
-      if (result.details) await localizeSteamImages(appid, result.details)
+      if (result.details) {
+        await localizeSteamImages(appid, result.details)
+        downloaded++
+      } else {
+        noStorePage++
+      }
       await new Promise((r) => setTimeout(r, SCREENSHOT_SWEEP_DELAY_MS))
     }
   }
 
   await Promise.all(Array.from({ length: SCREENSHOT_SWEEP_CONCURRENCY }, () => worker()))
+
+  return {
+    totalSteamGames: targets.length,
+    alreadyCached,
+    attempted,
+    downloaded,
+    noStorePage,
+    rateLimited: rateLimitHit,
+    retryAfter: rateLimitHit ? new Date(steamRateLimitedUntil).toISOString() : null
+  }
 }
 
 async function fetchSteamMetadataForGame(game: Game, needsCover: boolean): Promise<boolean> {
@@ -1814,6 +1854,8 @@ function registerIpcHandlers(): void {
     if (!result.details) return null
     return localizeSteamImages(appid, result.details)
   })
+
+  ipcMain.handle('screenshots:sweepNow', async (): Promise<ScreenshotSweepResult> => sweepMissingScreenshots())
 
   ipcMain.handle('categories:getAll', async (): Promise<Category[]> => categories)
 

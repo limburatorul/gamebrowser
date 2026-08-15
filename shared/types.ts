@@ -102,6 +102,16 @@ export interface SteamGameDetails {
   metacriticScore: number | null
 }
 
+export interface ScreenshotSweepResult {
+  totalSteamGames: number
+  alreadyCached: number
+  attempted: number
+  downloaded: number
+  noStorePage: number
+  rateLimited: boolean
+  retryAfter: string | null
+}
+
 export interface LibrarySyncEvent {
   source: 'Steam' | 'Epic' | 'GOG' | 'Ubisoft'
   added: number
@@ -170,6 +180,7 @@ export interface GameApi {
   checkForUpdate(): Promise<UpdateCheckResult>
   downloadUpdateAndRestart(assetUrl: string, assetSize: number, version: string): Promise<UpdateApplyResult>
   getSteamDetails(id: string): Promise<SteamGameDetails | null>
+  sweepScreenshotsNow(): Promise<ScreenshotSweepResult>
   getCategories(): Promise<Category[]>
   createCategory(name: string): Promise<Category>
   renameCategory(id: string, name: string): Promise<Category | null>

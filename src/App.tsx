@@ -89,6 +89,7 @@ export default function App(): JSX.Element {
   const [dashboardOpen, setDashboardOpen] = useState(false)
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
+  const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
   const [updateDownloading, setUpdateDownloading] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [whatsNew, setWhatsNew] = useState<{ title: string; entries: ChangelogEntry[] } | null>(null)
@@ -417,6 +418,30 @@ export default function App(): JSX.Element {
       })
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleSweepScreenshotsNow(): Promise<void> {
+    setSweepingScreenshots(true)
+    try {
+      const r = await window.api.sweepScreenshotsNow()
+      if (r.totalSteamGames === 0) {
+        setInfoMessage({ title: 'Screenshot Cache', message: 'No Steam-tagged games in your library yet.' })
+        return
+      }
+      const lines = [`${r.alreadyCached} of ${r.totalSteamGames} Steam games already have cached screenshots.`]
+      if (r.attempted > 0) {
+        lines.push(
+          `Checked ${r.attempted} more just now: downloaded ${r.downloaded}, ${r.noStorePage} had no Steam store page.`
+        )
+      }
+      if (r.rateLimited) {
+        const retryTime = r.retryAfter ? new Date(r.retryAfter).toLocaleTimeString() : 'shortly'
+        lines.push(`Steam is currently rate-limiting requests — will retry automatically after ${retryTime}.`)
+      }
+      setInfoMessage({ title: 'Screenshot Cache', message: lines.join(' ') })
+    } finally {
+      setSweepingScreenshots(false)
     }
   }
 
@@ -931,6 +956,8 @@ export default function App(): JSX.Element {
           onRestoreBackup={handleRestoreBackup}
           onRestoreFromPath={handleRestoreFromPath}
           backupBusy={busy}
+          onSweepScreenshotsNow={handleSweepScreenshotsNow}
+          sweepingScreenshots={sweepingScreenshots}
         />
       )}
       {aboutOpen && (
