@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.22.1',
+    changes: [
+      'Fix: the most-played list in the sidebar ran underneath the bar at the bottom of the window, hiding its last entries and the total. It only started happening once importing Steam playtime made that list long enough to reach the bottom. Same fix the details panel got.'
+    ]
+  },
+  {
     version: '1.22.0',
     changes: [
       'Fix: covers and genres were only ever fetched once, at the moment a game was imported — if that attempt failed, the game stayed blank forever unless you noticed and pressed "Fetch Covers" yourself. Anything still missing is now retried automatically on startup and every 15 minutes. On a 566-game library this filled in 40 covers and 38 genre lists on the first run.',

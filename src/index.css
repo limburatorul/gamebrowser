@@ -459,6 +459,19 @@ select {
   display: flex;
   flex-direction: column;
   padding: 64px 0 12px;
+  transition: padding-bottom 220ms ease;
+}
+
+/* Third place needing to clear the position:absolute details bar, after
+   .game-scroll and .details-panel. It only started mattering once Steam
+   playtime import made the most-played list long enough to reach the bottom
+   of the window - before that it never got near it. Padding rather than the
+   margin .details-panel uses: the bar spans the full window width, so the
+   sidebar's background should keep painting behind the translucent bar
+   instead of stopping short and leaving a strip of app background. The
+   flex:1 list inside ends at the padding edge either way. */
+.app.has-details .sidebar {
+  padding-bottom: calc(12px + var(--details-bar-height));
 }
 
 .sidebar-brand {
