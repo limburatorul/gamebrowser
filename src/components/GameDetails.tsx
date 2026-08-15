@@ -9,6 +9,7 @@ interface Props {
   running: boolean
   onLaunch: (id: string) => void
   onLaunchTrainer: (id: string) => void
+  onLaunchWithTrainer: (id: string) => void
   onFindTrainer: (id: string) => void
   onToggleFavorite: (id: string) => void
   onRate: (id: string, rating: number | null) => void
@@ -27,6 +28,7 @@ export default function GameDetails({
   running,
   onLaunch,
   onLaunchTrainer,
+  onLaunchWithTrainer,
   onFindTrainer,
   onToggleFavorite,
   onRate,
@@ -55,11 +57,21 @@ export default function GameDetails({
         <button className="btn btn-primary" onClick={() => onLaunch(game.id)} disabled={running}>
           {running ? 'Running…' : '▶ Play'}
         </button>
+        {game.trainerPath && (
+          <button
+            className="btn"
+            title="Start the trainer, then the game"
+            disabled={running}
+            onClick={() => onLaunchWithTrainer(game.id)}
+          >
+            ▶ Play + Trainer
+          </button>
+        )}
         <button
           className="btn"
           title={
             game.trainerPath
-              ? `Run ${game.trainerPath.split('\\').pop()}`
+              ? `Run ${game.trainerPath.split('\\').pop()} on its own`
               : 'Open the trainer site for this game in your browser'
           }
           onClick={() => (game.trainerPath ? onLaunchTrainer(game.id) : onFindTrainer(game.id))}

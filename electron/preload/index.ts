@@ -57,6 +57,7 @@ const api: GameApi = {
   pickTrainerFolder: () => ipcRenderer.invoke('trainers:pickFolder'),
   scanTrainers: () => ipcRenderer.invoke('trainers:scan'),
   launchTrainer: (id: string) => ipcRenderer.invoke('trainers:launch', id),
+  launchWithTrainer: (id: string) => ipcRenderer.invoke('trainers:launchWithGame', id),
   openTrainerSearch: (id: string) => ipcRenderer.invoke('trainers:openSearch', id),
   onDiskSizeProgress: (cb: (progress: ScanProgress | null) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, progress: ScanProgress | null): void => cb(progress)

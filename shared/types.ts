@@ -264,6 +264,7 @@ export interface GameApi {
   pickTrainerFolder(): Promise<string | null>
   scanTrainers(): Promise<TrainerScanResult>
   launchTrainer(id: string): Promise<{ ok: boolean; error?: string }>
+  launchWithTrainer(id: string): Promise<{ ok: boolean; error?: string }>
   openTrainerSearch(id: string): Promise<void>
   onDiskSizeProgress(cb: (progress: ScanProgress | null) => void): () => void
   getCategories(): Promise<Category[]>

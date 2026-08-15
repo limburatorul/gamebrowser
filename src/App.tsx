@@ -309,6 +309,7 @@ export default function App(): JSX.Element {
     if (filter === 'favorites') list = list.filter((g) => g.favorite)
     if (filter === 'recent') list = list.filter((g) => g.lastPlayed)
     if (filter === 'never-played') list = list.filter((g) => g.playtimeSeconds === 0)
+    if (filter === 'has-trainer') list = list.filter((g) => g.trainerPath)
     if (filter === 'no-cover') list = list.filter((g) => !g.coverPath)
     if (filter === 'steam') list = list.filter((g) => g.source === 'steam')
     if (filter === 'epic') list = list.filter((g) => g.source === 'epic')
@@ -805,6 +806,12 @@ export default function App(): JSX.Element {
     })
   }
 
+  function handleLaunchWithTrainer(id: string): void {
+    void window.api.launchWithTrainer(id).then((r) => {
+      if (!r.ok) setInfoMessage({ title: 'Trainer', message: r.error ?? 'Could not start the trainer.' })
+    })
+  }
+
   function handleFindTrainer(id: string): void {
     void window.api.openTrainerSearch(id)
   }
@@ -1058,6 +1065,7 @@ export default function App(): JSX.Element {
           totalCount={games.length}
           favoriteCount={games.filter((g) => g.favorite).length}
           neverPlayedCount={games.filter((g) => g.playtimeSeconds === 0).length}
+          hasTrainerCount={games.filter((g) => g.trainerPath).length}
           noCoverCount={games.filter((g) => !g.coverPath).length}
           steamCount={games.filter((g) => g.source === 'steam').length}
           epicCount={games.filter((g) => g.source === 'epic').length}
@@ -1109,6 +1117,7 @@ export default function App(): JSX.Element {
           running={runningIds.has(lastSelectedGame.id)}
           onLaunch={handleLaunch}
           onLaunchTrainer={handleLaunchTrainer}
+          onLaunchWithTrainer={handleLaunchWithTrainer}
           onFindTrainer={handleFindTrainer}
           onToggleFavorite={handleToggleFavorite}
           onRate={handleRateGame}

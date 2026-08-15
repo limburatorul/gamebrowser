@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell, screen } from 'electron'
 import { join, dirname, basename, extname } from 'path'
 import { promises as fs, watch, type Dirent } from 'fs'
 import { randomUUID } from 'crypto'
@@ -72,6 +72,10 @@ const screenshotsDir = join(userDataPath, 'screenshots')
 // gets picked up by backups, instead of depending on wherever they were
 // originally downloaded still existing.
 const trainersDir = join(userDataPath, 'trainers')
+// Window geometry lives in its own file rather than settings.json: it changes
+// on every resize and drag, and settings.json holds things worth not rewriting
+// dozens of times a minute.
+const windowStateFile = join(userDataPath, 'window.json')
 const settingsFile = join(userDataPath, 'settings.json')
 const categoriesFile = join(userDataPath, 'categories.json')
 
@@ -1796,6 +1800,38 @@ function startTrainerWatchers(): void {
   }
 }
 
+// Extracted from the games:launch handler so "Play with Trainer" can reuse it
+// rather than duplicating the playtime bookkeeping.
+async function launchGame(id: string): Promise<void> {
+  const game = games.find((g) => g.id === id)
+  if (!game || runningProcesses.has(id)) return
+
+  // Launching via a forked helper keeps the (potentially slow, AV-scanned)
+  // CreateProcess call for the game's own .exe off the main process's event
+  // loop, so the UI doesn't freeze while Windows starts the game.
+  const helper = fork(join(__dirname, 'launcher-helper.js'), [game.exePath, game.installDir], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    stdio: 'ignore',
+    silent: true
+  })
+
+  runningProcesses.set(id, { child: helper, start: Date.now() })
+  broadcastRunning(id, true)
+  const finish = async (): Promise<void> => {
+    const info = runningProcesses.get(id)
+    runningProcesses.delete(id)
+    if (info) {
+      game.playtimeSeconds += Math.round((Date.now() - info.start) / 1000)
+    }
+    game.lastPlayed = new Date().toISOString()
+    await saveLibrary()
+    broadcastLibrary()
+    broadcastRunning(id, false)
+  }
+  helper.once('exit', () => void finish())
+  helper.once('error', () => void finish())
+}
+
 async function runBackup(): Promise<BackupResult> {
   if (!settings.backupFolder) return { ok: false, error: 'No backup folder set.', settings }
   try {
@@ -2139,35 +2175,7 @@ function registerIpcHandlers(): void {
     return { imported: created.length }
   })
 
-  ipcMain.handle('games:launch', async (_e, id: string) => {
-    const game = games.find((g) => g.id === id)
-    if (!game || runningProcesses.has(id)) return
-
-    // Launching via a forked helper keeps the (potentially slow, AV-scanned)
-    // CreateProcess call for the game's own .exe off the main process's event
-    // loop, so the UI doesn't freeze while Windows starts the game.
-    const helper = fork(join(__dirname, 'launcher-helper.js'), [game.exePath, game.installDir], {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: 'ignore',
-      silent: true
-    })
-
-    runningProcesses.set(id, { child: helper, start: Date.now() })
-    broadcastRunning(id, true)
-    const finish = async (): Promise<void> => {
-      const info = runningProcesses.get(id)
-      runningProcesses.delete(id)
-      if (info) {
-        game.playtimeSeconds += Math.round((Date.now() - info.start) / 1000)
-      }
-      game.lastPlayed = new Date().toISOString()
-      await saveLibrary()
-      broadcastLibrary()
-      broadcastRunning(id, false)
-    }
-    helper.once('exit', () => void finish())
-    helper.once('error', () => void finish())
-  })
+  ipcMain.handle('games:launch', async (_e, id: string) => launchGame(id))
 
   ipcMain.handle(
     'games:update',
@@ -2451,6 +2459,21 @@ function registerIpcHandlers(): void {
     return error ? { ok: false, error } : { ok: true }
   })
 
+  // Starts the trainer first, then the game. FLiNG trainers attach to the
+  // running process and poll for it, so having it up first means it hooks as
+  // soon as the game appears rather than needing a manual re-scan.
+  ipcMain.handle('trainers:launchWithGame', async (_e, id: string): Promise<{ ok: boolean; error?: string }> => {
+    const game = games.find((g) => g.id === id)
+    if (!game) return { ok: false, error: 'Game not found.' }
+    if (game.trainerPath) {
+      const error = await shell.openPath(game.trainerPath)
+      if (error) return { ok: false, error }
+      await new Promise((r) => setTimeout(r, 1200))
+    }
+    await launchGame(id)
+    return { ok: true }
+  })
+
   ipcMain.handle('trainers:openSearch', async (_e, id: string): Promise<void> => {
     const game = games.find((g) => g.id === id)
     if (!game) return
@@ -2563,10 +2586,89 @@ function registerIpcHandlers(): void {
   )
 }
 
-function createWindow(): void {
+interface WindowState {
+  width: number
+  height: number
+  x: number | null
+  y: number | null
+  maximized: boolean
+}
+
+async function loadWindowState(): Promise<WindowState | null> {
+  try {
+    const raw = await fs.readFile(windowStateFile, 'utf-8')
+    const parsed = JSON.parse(raw) as Partial<WindowState>
+    if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return null
+    return {
+      width: Math.max(1500, Math.round(parsed.width as number)),
+      height: Math.max(640, Math.round(parsed.height as number)),
+      x: Number.isFinite(parsed.x) ? Math.round(parsed.x as number) : null,
+      y: Number.isFinite(parsed.y) ? Math.round(parsed.y as number) : null,
+      maximized: !!parsed.maximized
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * A saved position is only usable if it still lands on a display that exists -
+ * otherwise unplugging the monitor it was last on reopens the window somewhere
+ * invisible, with no obvious way to get it back.
+ */
+function positionIsOnSomeDisplay(x: number, y: number, width: number, height: number): boolean {
+  return screen.getAllDisplays().some((display) => {
+    const b = display.workArea
+    // Require a decent chunk of the titlebar to be reachable, not just a pixel.
+    return x + width > b.x + 80 && x < b.x + b.width - 80 && y >= b.y - 8 && y < b.y + b.height - 40
+  })
+}
+
+function trackWindowState(win: BrowserWindow): void {
+  let timer: NodeJS.Timeout | null = null
+  const save = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      if (win.isDestroyed()) return
+      const maximized = win.isMaximized()
+      // getNormalBounds is the un-maximized geometry, which is what should be
+      // restored when the user un-maximizes later.
+      const bounds = win.getNormalBounds()
+      const state: WindowState = {
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y,
+        maximized
+      }
+      void fs.writeFile(windowStateFile, JSON.stringify(state, null, 2), 'utf-8').catch(() => undefined)
+    }, 500)
+  }
+  // Registered one by one rather than looping a union of event names, which
+  // doesn't line up with BrowserWindow's per-event overloads.
+  win.on('resize', save)
+  win.on('move', save)
+  win.on('maximize', save)
+  win.on('unmaximize', save)
+  win.on('close', save)
+}
+
+function createWindow(saved: WindowState | null): void {
+  // A saved position only survives if the display it referred to still exists,
+  // otherwise unplugging a monitor reopens the window off-screen.
+  const usePosition =
+    saved?.x !== null &&
+    saved?.y !== undefined &&
+    saved !== null &&
+    saved.x !== null &&
+    saved.y !== null &&
+    positionIsOnSomeDisplay(saved.x, saved.y, saved.width, saved.height)
+
   const win = new BrowserWindow({
-    width: 1920,
-    height: 1080,
+    width: saved?.width ?? 1920,
+    height: saved?.height ?? 1080,
+    ...(usePosition && saved ? { x: saved.x as number, y: saved.y as number } : {}),
     // Measured live over CDP, not estimated: shrinking the viewport until
     // anything in the topbar clips puts the real floor at 1444px of viewport
     // (1460px of window, +16px chrome) in the worst case - both the genre and
@@ -2590,6 +2692,9 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
+
+  if (saved?.maximized) win.maximize()
+  trackWindowState(win)
 
   win.on('ready-to-show', () => win.show())
 
@@ -2626,7 +2731,7 @@ if (gotSingleInstanceLock) {
 
     Menu.setApplicationMenu(null)
     registerIpcHandlers()
-    createWindow()
+    createWindow(await loadWindowState())
     void repairIgnoredExePaths()
     // Playtime sync runs after the library sync so games imported on this
     // launch already exist (and carry a steamAppId) by the time it looks.
@@ -2680,7 +2785,7 @@ if (gotSingleInstanceLock) {
     setInterval(() => void sweepDiskSizes(), METADATA_SWEEP_INTERVAL_MS)
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      if (BrowserWindow.getAllWindows().length === 0) void loadWindowState().then(createWindow)
     })
   })
 

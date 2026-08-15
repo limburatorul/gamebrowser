@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.25.0',
+    changes: [
+      'The window now remembers its size, position and whether it was maximised, and comes back the same way. It used to open at 1920×1080 in the default spot every single time. A position on a monitor that is no longer connected is ignored, so unplugging a screen cannot leave the window somewhere you cannot reach it.',
+      'New: "Play + Trainer" starts the trainer and then the game in one click, for games that have one.',
+      'New: a ⚡ mark on the cover of games with a trainer, and a "Has Trainer" filter in the sidebar.'
+    ]
+  },
+  {
     version: '1.24.1',
     changes: [
       'Trainers now file themselves. Your trainers folder and, if you leave it enabled, your Downloads folder are watched — a trainer that appears there is matched and copied in within a few seconds, with no rescan and nothing to do by hand.',
