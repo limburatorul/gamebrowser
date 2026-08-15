@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { AppIconChoice, BackupEntry, BackupPrefs, Settings } from '@shared/types'
+import type { BackupEntry, BackupPrefs, Settings } from '@shared/types'
 import type { UiPrefs } from '../lib/uiPrefs'
 import ColorPicker from './ColorPicker'
 import { ACCENT_PRESETS, SIDEBAR_PRESETS } from '../lib/color'
-import { toLocalFileUrl } from '../lib/localFile'
 
 interface Props {
   initial: Settings
@@ -71,11 +70,6 @@ export default function SettingsDialog({
   const [backups, setBackups] = useState<BackupEntry[]>([])
   const [backupsError, setBackupsError] = useState<string | null>(null)
   const [restoringPath, setRestoringPath] = useState<string | null>(null)
-  const [iconChoices, setIconChoices] = useState<AppIconChoice[]>([])
-
-  useEffect(() => {
-    void window.api.getIconChoices().then(setIconChoices)
-  }, [])
 
   function refreshBackups(): void {
     void window.api.listBackups().then((result) => {
@@ -234,28 +228,6 @@ export default function SettingsDialog({
 
             <p className="settings-note">
               The card highlight is the frame behind a game card when it is hovered or selected.
-            </p>
-
-            <h3 className="settings-section">App Icon</h3>
-
-            <div className="app-icon-choices">
-              {iconChoices.map((choice) => (
-                <button
-                  key={choice.id}
-                  type="button"
-                  className={`app-icon-choice ${uiPrefs.appIcon === choice.id ? 'active' : ''}`}
-                  title={choice.label}
-                  onClick={() => setPref('appIcon', choice.id)}
-                >
-                  <img src={toLocalFileUrl(choice.path) ?? ''} alt={choice.label} />
-                  <span>{choice.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <p className="settings-note">
-              Changes the window and taskbar icon straight away. The icon baked into the .exe file itself
-              can only be changed by rebuilding, so Windows Explorer keeps showing the default one.
             </p>
 
             <p className="settings-note">Appearance changes apply instantly and are saved automatically.</p>

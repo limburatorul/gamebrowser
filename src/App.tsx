@@ -163,12 +163,6 @@ export default function App(): JSX.Element {
     })
   }, [])
 
-  // The icon choice lives in localStorage (like the rest of Appearance), which
-  // main can't read, so the renderer replays it on every launch.
-  useEffect(() => {
-    void window.api.setAppIcon(uiPrefs.appIcon)
-  }, [uiPrefs.appIcon])
-
   useEffect(() => {
     window.api.getAppInfo().then((info) => {
       const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY)

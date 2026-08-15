@@ -8,9 +8,6 @@ export interface UiPrefs {
   // Glass treatment for the highlight behind a hovered/selected game card.
   tileHighlightOpacity: number
   tileHighlightBlur: number
-  // Which of the shipped window/taskbar icons to use. Validated in the main
-  // process against the real list, so an unknown id here just falls back.
-  appIcon: string
   backdropEnabled: boolean
   backdropIntervalSec: number
   backdropBrightness: number
@@ -26,7 +23,6 @@ export const DEFAULT_UI_PREFS: UiPrefs = {
   detailsBarBlur: 16,
   tileHighlightOpacity: 0.55,
   tileHighlightBlur: 16,
-  appIcon: 'default',
   backdropEnabled: true,
   backdropIntervalSec: 8,
   backdropBrightness: 0.4,
@@ -62,7 +58,6 @@ export function loadUiPrefs(): UiPrefs {
         DEFAULT_UI_PREFS.tileHighlightOpacity
       ),
       tileHighlightBlur: clamp(Number(parsed.tileHighlightBlur), 0, 30, DEFAULT_UI_PREFS.tileHighlightBlur),
-      appIcon: typeof parsed.appIcon === 'string' && parsed.appIcon ? parsed.appIcon : DEFAULT_UI_PREFS.appIcon,
       backdropEnabled:
         typeof parsed.backdropEnabled === 'boolean' ? parsed.backdropEnabled : DEFAULT_UI_PREFS.backdropEnabled,
       backdropIntervalSec: clamp(

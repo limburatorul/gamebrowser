@@ -1,6 +1,6 @@
 {
   "name": "game-browser",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "private": true,
   "description": "A lightweight, standalone game library manager with manual and folder-scan import.",
   "main": "out/main/index.js",
@@ -38,8 +38,7 @@
     "files": [
       "out/**/*",
       "package.json",
-      "node_modules/sql.js/dist/sql-wasm.wasm",
-      "resources/app-icons/*.png"
+      "node_modules/sql.js/dist/sql-wasm.wasm"
     ],
     "win": {
       "target": "portable",

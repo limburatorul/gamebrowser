@@ -21,8 +21,6 @@ import type {
 const api: GameApi = {
   getAll: () => ipcRenderer.invoke('games:getAll'),
   getAppInfo: () => ipcRenderer.invoke('app:getInfo'),
-  getIconChoices: () => ipcRenderer.invoke('app:getIconChoices'),
-  setAppIcon: (id: string) => ipcRenderer.invoke('app:setIcon', id),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
   addManual: () => ipcRenderer.invoke('games:addManual'),
   scanFolder: () => ipcRenderer.invoke('games:scanFolder'),

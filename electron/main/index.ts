@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell } from 'electron'
 import { join, dirname, basename, extname } from 'path'
 import { promises as fs, type Dirent } from 'fs'
 import { randomUUID } from 'crypto'
@@ -19,32 +19,13 @@ import type {
   LibrarySyncEvent,
   Category,
   SteamGameDetails,
-  ScreenshotSweepResult,
-  AppIconChoice
+  ScreenshotSweepResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
 import { findGogGames, type GogGame } from './gog'
 
 const execFileAsync = promisify(execFile)
-
-// Window/taskbar icons the user can pick between in Settings > Appearance.
-// They deliberately live in resources/, NOT build/: build/ is electron-builder's
-// buildResources directory, which it excludes from the packaged app no matter
-// what build.files says. resources/app-icons/* is named in build.files instead
-// (that list only ships out/** plus explicitly-named extras), same trick the
-// sql.js .wasm needed. "default" is a copy of the artwork the .exe carries.
-const APP_ICON_CHOICES: { id: string; label: string; file: string }[] = [
-  { id: 'default', label: 'Default', file: 'default.png' },
-  { id: 'ufo', label: 'UFO', file: 'ufo.png' },
-  { id: 'planet', label: 'Planet', file: 'planet.png' },
-  { id: 'rocket', label: 'Rocket', file: 'rocket.png' }
-]
-
-function appIconPath(file: string): string {
-  // app.getAppPath() resolves correctly in both dev and packaged builds.
-  return join(app.getAppPath(), 'resources', 'app-icons', file)
-}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local-file', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }
@@ -1892,24 +1873,6 @@ function registerIpcHandlers(): void {
     electronVersion: process.versions.electron,
     dataPath: userDataPath
   }))
-
-  ipcMain.handle(
-    'app:getIconChoices',
-    async (): Promise<AppIconChoice[]> =>
-      APP_ICON_CHOICES.map((c) => ({ id: c.id, label: c.label, path: appIconPath(c.file) }))
-  )
-
-  // The choice itself lives in the renderer's uiPrefs (localStorage), like
-  // every other Appearance setting, so the renderer replays it on startup.
-  ipcMain.handle('app:setIcon', async (_e, id: string): Promise<void> => {
-    const choice = APP_ICON_CHOICES.find((c) => c.id === id) ?? APP_ICON_CHOICES[0]
-    const image = nativeImage.createFromPath(appIconPath(choice.file))
-    // A missing/unreadable file yields an empty image, and handing that to
-    // setIcon blanks the window icon entirely - better to leave whatever is
-    // already there.
-    if (image.isEmpty()) return
-    for (const win of BrowserWindow.getAllWindows()) win.setIcon(image)
-  })
 
   ipcMain.handle('app:openDataFolder', async () => {
     await shell.openPath(userDataPath)

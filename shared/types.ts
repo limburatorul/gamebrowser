@@ -145,20 +145,9 @@ export interface AppInfo {
   dataPath: string
 }
 
-export interface AppIconChoice {
-  id: string
-  label: string
-  // Absolute path on disk - the renderer renders it through the local-file://
-  // protocol for the Settings previews, the main process feeds it to
-  // win.setIcon(). One set of files, no duplicated copies to keep in sync.
-  path: string
-}
-
 export interface GameApi {
   getAll(): Promise<Game[]>
   getAppInfo(): Promise<AppInfo>
-  getIconChoices(): Promise<AppIconChoice[]>
-  setAppIcon(id: string): Promise<void>
   openDataFolder(): Promise<void>
   addManual(): Promise<Game | null>
   scanFolder(): Promise<GameCandidate[]>

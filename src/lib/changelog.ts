@@ -6,9 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.1',
+    changes: [
+      'The app has a new icon — a rocket, with a properly transparent background so it sits cleanly on any taskbar or desktop.',
+      'Removed the app icon picker added in 1.19.0. It could only repaint the window icon, not the one Windows actually shows in the taskbar and Explorer, so it never did what it looked like it did. The new icon is simply the icon now.'
+    ]
+  },
+  {
     version: '1.19.0',
     changes: [
-      'New: pick the app icon in Settings → Appearance — three space-themed alternatives alongside the default. It changes the window and taskbar icon straight away; the icon on the .exe file itself stays the default, since that one is baked in at build time.',
       'New: "Ignore Playtime" in the right-click menu on a game — leaves it out of the most-played list in the sidebar, the total playtime, and the dashboard, for games whose hours you would rather not count. Playtime keeps being recorded, so switching it back off restores the number untouched.',
       'The window title now shows the version number after the app name.',
       'The highlight behind a hovered or selected game card is now translucent and blurred like the top and details bars, slightly wider on the left and right, and both its transparency and blur are adjustable in Settings → Appearance.',
