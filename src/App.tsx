@@ -68,6 +68,7 @@ export default function App(): JSX.Element {
     backupIntervalHours: 24,
     backupKeepCount: 5,
     trainerFolder: '',
+    watchDownloadsForTrainers: true,
     lastBackupAt: null,
     librarySyncEnabled: true
   })

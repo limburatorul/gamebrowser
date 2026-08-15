@@ -72,6 +72,9 @@ export interface Settings {
   backupKeepCount: number
   /** Folder the user keeps trainers in. Nothing is ever written there. */
   trainerFolder: string
+  /** Also watch the OS Downloads folder, so a freshly downloaded trainer is
+      filed away without the user going back to Settings to rescan. */
+  watchDownloadsForTrainers: boolean
   lastBackupAt: string | null
   librarySyncEnabled: boolean
 }

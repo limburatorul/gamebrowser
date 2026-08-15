@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell } from 'electron'
 import { join, dirname, basename, extname } from 'path'
-import { promises as fs, type Dirent } from 'fs'
+import { promises as fs, watch, type Dirent } from 'fs'
 import { randomUUID } from 'crypto'
 import { fork, execFile, spawn, type ChildProcess } from 'child_process'
 import { promisify } from 'util'
@@ -87,6 +87,7 @@ let settings: Settings = {
   backupIntervalHours: 24,
   backupKeepCount: 5,
   trainerFolder: '',
+  watchDownloadsForTrainers: true,
   lastBackupAt: null,
   librarySyncEnabled: true
 }
@@ -1671,11 +1672,33 @@ async function syncSteamPlaytime(): Promise<SteamPlaytimeSyncResult> {
 async function scanTrainers(): Promise<TrainerScanResult> {
   const folder = settings.trainerFolder
   const result: TrainerScanResult = { folder, trainerFiles: 0, matched: 0, unmatchedFiles: 0 }
-  if (!folder) return { ...result, error: 'No trainer folder set.' }
+
+  // Sources, in priority order: whatever is already filed in userData, the
+  // user's own folder, and Downloads when enabled - so a trainer downloaded a
+  // minute ago counts without having to be moved anywhere first.
+  const sources: string[] = [trainersDir]
+  if (folder) sources.push(folder)
+  if (settings.watchDownloadsForTrainers) {
+    try {
+      sources.push(app.getPath('downloads'))
+    } catch {
+      // no Downloads folder; skip
+    }
+  }
+  if (sources.length === 1) return { ...result, error: 'No trainer folder set.' }
 
   try {
     await fs.mkdir(trainersDir, { recursive: true })
-    const trainers = await scanTrainerFolder(folder)
+    const seen = new Set<string>()
+    const trainers = []
+    for (const source of sources) {
+      for (const t of await scanTrainerFolder(source)) {
+        const key = t.fileName.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        trainers.push(t)
+      }
+    }
     result.trainerFiles = trainers.length
 
     const usedFiles = new Set<string>()
@@ -1727,6 +1750,49 @@ async function scanTrainers(): Promise<TrainerScanResult> {
     return result
   } catch (e) {
     return { ...result, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/**
+ * Watches the trainer folder and, optionally, the OS Downloads folder, so a
+ * trainer the user has just downloaded is matched and filed without them
+ * going back to Settings to press Rescan. This is the substitute for
+ * downloading automatically: the fetching stays a normal visit to the site,
+ * everything after it is handled here.
+ */
+const trainerWatchers: import('fs').FSWatcher[] = []
+let trainerRescanTimer: NodeJS.Timeout | null = null
+
+function scheduleTrainerRescan(): void {
+  // Downloads land in pieces (.crdownload, then a rename), and a folder copy
+  // fires many events, so settle before doing the work.
+  if (trainerRescanTimer) clearTimeout(trainerRescanTimer)
+  trainerRescanTimer = setTimeout(() => {
+    trainerRescanTimer = null
+    void scanTrainers()
+  }, 4000)
+}
+
+function startTrainerWatchers(): void {
+  for (const w of trainerWatchers.splice(0)) w.close()
+  const folders = new Set<string>()
+  if (settings.trainerFolder) folders.add(settings.trainerFolder)
+  if (settings.watchDownloadsForTrainers) {
+    try {
+      folders.add(app.getPath('downloads'))
+    } catch {
+      // no Downloads folder on this machine; nothing to watch
+    }
+  }
+  for (const folder of folders) {
+    try {
+      const watcher = watch(folder, { persistent: false }, (_event, file) => {
+        if (typeof file === 'string' && file.toLowerCase().endsWith('.exe')) scheduleTrainerRescan()
+      })
+      trainerWatchers.push(watcher)
+    } catch {
+      // unreadable/nonexistent folder - skip it rather than fail startup
+    }
   }
 }
 
@@ -2370,6 +2436,7 @@ function registerIpcHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) return null
     settings = { ...settings, trainerFolder: result.filePaths[0] }
     await saveSettingsToDisk()
+    startTrainerWatchers()
     return settings.trainerFolder
   })
 
@@ -2605,6 +2672,10 @@ if (gotSingleInstanceLock) {
     // of startup without depending on anything else finishing; the interval
     // then picks up newly added games and the weekly re-measure, exiting
     // immediately when there's nothing due.
+    startTrainerWatchers()
+    // Catch anything that landed while the app was closed.
+    if (settings.trainerFolder || settings.watchDownloadsForTrainers) void scanTrainers()
+
     setTimeout(() => void sweepDiskSizes(), 60 * 1000)
     setInterval(() => void sweepDiskSizes(), METADATA_SWEEP_INTERVAL_MS)
 

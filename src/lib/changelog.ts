@@ -6,6 +6,13 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.24.1',
+    changes: [
+      'Trainers now file themselves. Your trainers folder and, if you leave it enabled, your Downloads folder are watched — a trainer that appears there is matched and copied in within a few seconds, with no rescan and nothing to do by hand.',
+      'Anything that landed while the app was closed is picked up on the next start.'
+    ]
+  },
+  {
     version: '1.24.0',
     changes: [
       'New: trainers are part of the library. Point Settings → Automation at the folder where you keep them and matching ones are copied into the app\'s own data folder, so they stay with the library and are included in backups.',
