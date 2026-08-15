@@ -52,6 +52,7 @@ const api: GameApi = {
     return () => ipcRenderer.removeListener('backup:progress', listener)
   },
   syncSteamPlaytimeNow: () => ipcRenderer.invoke('steam:syncPlaytime'),
+  sweepMetadataNow: () => ipcRenderer.invoke('metadata:sweepNow'),
   getSettings: (): Promise<Settings> => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings: Settings): Promise<Settings> => ipcRenderer.invoke('settings:save', settings),
   onLibraryChanged: (cb: (games: Game[]) => void) => {

@@ -20,7 +20,8 @@ import type {
   Category,
   SteamGameDetails,
   ScreenshotSweepResult,
-  SteamPlaytimeSyncResult
+  SteamPlaytimeSyncResult,
+  MetadataSweepResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -771,6 +772,85 @@ async function runCoverAutoQueue(): Promise<void> {
     await new Promise((r) => setTimeout(r, 300))
   }
   coverAutoQueueRunning = false
+}
+
+// Games with no match on any source. Session-only on purpose: a fresh launch
+// retries them, in case the miss was really a transient failure rather than
+// the game genuinely not existing on IGDB/Steam/RAWG.
+const noMetadataMatchIds = new Set<string>()
+let metadataSweepRunning = false
+
+const METADATA_SWEEP_DELAY_MS = 700
+const METADATA_SWEEP_INTERVAL_MS = 15 * 60 * 1000
+
+/**
+ * Fills in covers and genres that are still missing, and keeps doing it.
+ *
+ * enqueueAutoCoverFetch only ever fires when a game is *added*, so a fetch
+ * that failed at that moment - network blip, expired IGDB token, a Steam
+ * hiccup - left that game without a cover permanently, until someone noticed
+ * and pressed "Fetch Covers" by hand. On this library that was 78 games with
+ * no cover and 98 with no genres, 47 of them Steam imports whose appid was
+ * known all along. Exactly the shape of the screenshot-sweep bug, so it gets
+ * the same treatment: periodic retry plus a manual trigger that reports what
+ * actually happened.
+ */
+async function sweepMissingMetadata(): Promise<MetadataSweepResult> {
+  const result: MetadataSweepResult = {
+    totalGames: games.length,
+    missingCoverBefore: games.filter((g) => !g.coverPath).length,
+    missingGenresBefore: games.filter((g) => g.genres.length === 0).length,
+    attempted: 0,
+    coversFilled: 0,
+    genresFilled: 0,
+    noMatch: 0,
+    skippedAfterEarlierMiss: 0,
+    alreadyRunning: false
+  }
+  if (metadataSweepRunning) return { ...result, alreadyRunning: true }
+  metadataSweepRunning = true
+
+  try {
+    const pending = games.filter((g) => !g.coverPath || g.genres.length === 0)
+    let changed = false
+
+    for (const game of pending) {
+      // The library can change under us mid-sweep (a sync removing a game, a
+      // manual fetch filling one in), so re-check against the live object.
+      const current = games.find((g) => g.id === game.id)
+      if (!current || (current.coverPath && current.genres.length > 0)) continue
+      if (noMetadataMatchIds.has(current.id)) {
+        result.skippedAfterEarlierMiss++
+        continue
+      }
+
+      const hadCover = !!current.coverPath
+      const hadGenres = current.genres.length > 0
+      result.attempted++
+
+      const source = await fetchMetadataForGame(current)
+      if (source) {
+        if (!hadCover && current.coverPath) result.coversFilled++
+        if (!hadGenres && current.genres.length > 0) result.genresFilled++
+        changed = true
+      } else {
+        result.noMatch++
+        noMetadataMatchIds.add(current.id)
+      }
+
+      await new Promise((r) => setTimeout(r, METADATA_SWEEP_DELAY_MS))
+    }
+
+    if (changed) {
+      await saveLibrary()
+      broadcastLibrary()
+    }
+    return result
+  } catch (e) {
+    return { ...result, error: e instanceof Error ? e.message : String(e) }
+  } finally {
+    metadataSweepRunning = false
+  }
 }
 
 async function extractIcon(exePath: string, id: string): Promise<string | null> {
@@ -2013,6 +2093,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('steam:syncPlaytime', async (): Promise<SteamPlaytimeSyncResult> => syncSteamPlaytime())
 
+  ipcMain.handle('metadata:sweepNow', async (): Promise<MetadataSweepResult> => sweepMissingMetadata())
+
   ipcMain.handle('categories:getAll', async (): Promise<Category[]> => categories)
 
   ipcMain.handle('categories:create', async (_e, name: string): Promise<Category> => {
@@ -2189,6 +2271,7 @@ if (gotSingleInstanceLock) {
     // reconciles the library against a platform.
     void syncPlatformLibraries()
       .then(() => (settings.librarySyncEnabled ? syncSteamPlaytime() : undefined))
+      .then(() => sweepMissingMetadata())
       .then(() => sweepMissingScreenshots())
     void maybeRunScheduledBackup()
     void cleanupOldPortableExes()
@@ -2212,6 +2295,12 @@ if (gotSingleInstanceLock) {
     // repeatedly: it short-circuits instantly both while still inside an
     // active backoff window and once the whole library is already cached.
     setInterval(() => void sweepMissingScreenshots(), 15 * 60 * 1000)
+
+    // Same reasoning for covers/genres: the per-game fetch on import is a
+    // single attempt, so anything that failed once stayed missing forever.
+    // Also cheap to re-run - it exits immediately once nothing is missing,
+    // and skips games already found to have no match this session.
+    setInterval(() => void sweepMissingMetadata(), METADATA_SWEEP_INTERVAL_MS)
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

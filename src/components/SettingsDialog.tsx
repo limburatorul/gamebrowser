@@ -22,6 +22,8 @@ interface Props {
   sweepingScreenshots: boolean
   onSyncSteamPlaytime: () => Promise<void>
   syncingPlaytime: boolean
+  onSweepMetadataNow: () => Promise<void>
+  sweepingMetadata: boolean
 }
 
 type Tab = 'appearance' | 'backup' | 'automation'
@@ -63,7 +65,9 @@ export default function SettingsDialog({
   onSweepScreenshotsNow,
   sweepingScreenshots,
   onSyncSteamPlaytime,
-  syncingPlaytime
+  syncingPlaytime,
+  onSweepMetadataNow,
+  sweepingMetadata
 }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('appearance')
   const [clientId, setClientId] = useState(initial.igdbClientId)
@@ -451,6 +455,16 @@ export default function SettingsDialog({
             </p>
             <button className="btn" type="button" disabled={sweepingScreenshots} onClick={() => void onSweepScreenshotsNow()}>
               {sweepingScreenshots ? 'Checking…' : 'Check Now'}
+            </button>
+
+            <h3 className="settings-section">Covers &amp; Genres</h3>
+            <p className="settings-note">
+              Anything still missing a cover or genres is retried automatically in the background, every 15 minutes
+              and on startup — a fetch that failed when the game was first imported no longer leaves it blank for
+              good. Check now to see exactly what is missing and what could not be matched.
+            </p>
+            <button className="btn" type="button" disabled={sweepingMetadata} onClick={() => void onSweepMetadataNow()}>
+              {sweepingMetadata ? 'Checking…' : 'Check Now'}
             </button>
 
             <h3 className="settings-section">Steam Playtime</h3>

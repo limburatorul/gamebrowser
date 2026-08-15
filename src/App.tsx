@@ -94,6 +94,7 @@ export default function App(): JSX.Element {
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
   const [syncingPlaytime, setSyncingPlaytime] = useState(false)
+  const [sweepingMetadata, setSweepingMetadata] = useState(false)
   const [updateDownloading, setUpdateDownloading] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [whatsNew, setWhatsNew] = useState<{ title: string; entries: ChangelogEntry[] } | null>(null)
@@ -470,6 +471,43 @@ export default function App(): JSX.Element {
       setInfoMessage({ title: 'Screenshot Cache', message: lines.join(' ') })
     } finally {
       setSweepingScreenshots(false)
+    }
+  }
+
+  async function handleSweepMetadataNow(): Promise<void> {
+    setSweepingMetadata(true)
+    try {
+      const r = await window.api.sweepMetadataNow()
+      if (r.alreadyRunning) {
+        setInfoMessage({ title: 'Covers & Genres', message: 'A sweep is already running — give it a moment.' })
+        return
+      }
+      if (r.error) {
+        setInfoMessage({ title: 'Covers & Genres', message: `Something went wrong: ${r.error}` })
+        return
+      }
+      if (r.missingCoverBefore === 0 && r.missingGenresBefore === 0) {
+        setInfoMessage({
+          title: 'Covers & Genres',
+          message: `All ${r.totalGames} games already have a cover and genres.`
+        })
+        return
+      }
+      const lines = [
+        `${r.missingCoverBefore} games were missing a cover and ${r.missingGenresBefore} were missing genres.`
+      ]
+      if (r.attempted > 0) {
+        lines.push(`Checked ${r.attempted}: filled in ${r.coversFilled} covers and ${r.genresFilled} genre lists.`)
+      }
+      if (r.noMatch > 0) {
+        lines.push(`${r.noMatch} had no match on any configured source — they'll be retried next time you start up.`)
+      }
+      if (r.skippedAfterEarlierMiss > 0) {
+        lines.push(`${r.skippedAfterEarlierMiss} were skipped, already checked without a match this session.`)
+      }
+      setInfoMessage({ title: 'Covers & Genres', message: lines.join(' ') })
+    } finally {
+      setSweepingMetadata(false)
     }
   }
 
@@ -1024,6 +1062,8 @@ export default function App(): JSX.Element {
           sweepingScreenshots={sweepingScreenshots}
           onSyncSteamPlaytime={handleSyncSteamPlaytime}
           syncingPlaytime={syncingPlaytime}
+          onSweepMetadataNow={handleSweepMetadataNow}
+          sweepingMetadata={sweepingMetadata}
         />
       )}
       {aboutOpen && (

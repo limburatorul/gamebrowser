@@ -122,6 +122,22 @@ export interface ScreenshotSweepResult {
   retryAfter: string | null
 }
 
+export interface MetadataSweepResult {
+  totalGames: number
+  missingCoverBefore: number
+  missingGenresBefore: number
+  attempted: number
+  coversFilled: number
+  genresFilled: number
+  /** Games this pass found nothing for on any source. */
+  noMatch: number
+  /** Skipped because an earlier pass this session already found nothing. */
+  skippedAfterEarlierMiss: number
+  /** True when a sweep was already in flight, so this call did nothing. */
+  alreadyRunning: boolean
+  error?: string
+}
+
 export interface SteamPlaytimeSyncResult {
   /** False when Steam isn't installed, or its local config couldn't be read. */
   steamFound: boolean
@@ -211,6 +227,7 @@ export interface GameApi {
   getSteamDetails(id: string): Promise<SteamGameDetails | null>
   sweepScreenshotsNow(): Promise<ScreenshotSweepResult>
   syncSteamPlaytimeNow(): Promise<SteamPlaytimeSyncResult>
+  sweepMetadataNow(): Promise<MetadataSweepResult>
   getCategories(): Promise<Category[]>
   createCategory(name: string): Promise<Category>
   renameCategory(id: string, name: string): Promise<Category | null>
