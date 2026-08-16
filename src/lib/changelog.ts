@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.27.0',
+    changes: [
+      'Scanning a folder now skips the games it has already imported from it, instead of digging through every subfolder again to find the few new ones. On a folder holding 536 games it went from working through all of them to looking at 28 and finishing in under three seconds.',
+      'New: "Rescan Folders" in the Import menu re-checks every folder you have scanned before, without asking you to pick one again — the folders are remembered.',
+      'When a scan turns up nothing new, it now says so, along with how many folders it looked at and how many it skipped.'
+    ]
+  },
+  {
     version: '1.26.0',
     changes: [
       'New: the bar at the bottom now shows where the game is installed, so when you have the same game twice — your own copy and the Steam one, or in two different places — you can tell which entry is which before deciding what to keep.',

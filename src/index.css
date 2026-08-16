@@ -1722,6 +1722,18 @@ select {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
 }
 
+.import-menu-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.import-menu-icon {
+  width: 16px;
+  text-align: center;
+  opacity: 0.85;
+}
+
 .import-menu-item {
   display: flex;
   align-items: center;

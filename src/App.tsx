@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BackupPrefs,
   Category,
+  FolderScanResult,
   Game,
   GameCandidate,
   LibrarySyncEvent,
@@ -67,6 +68,7 @@ export default function App(): JSX.Element {
     backupEnabled: false,
     backupIntervalHours: 24,
     backupKeepCount: 5,
+    scanRoots: [],
     trainerFolder: '',
     watchDownloadsForTrainers: true,
     lastBackupAt: null,
@@ -431,11 +433,41 @@ export default function App(): JSX.Element {
     }
   }
 
+  function reportScan(result: FolderScanResult, title: string): void {
+    if (result.candidates.length > 0) {
+      setCandidates(result.candidates)
+      return
+    }
+    if (result.scanned === 0 && result.skipped === 0) return
+    setInfoMessage({
+      title,
+      message:
+        `Nothing new. Looked at ${result.scanned} folder${result.scanned === 1 ? '' : 's'}` +
+        (result.skipped > 0 ? `, skipped ${result.skipped} already in your library.` : '.')
+    })
+  }
+
   async function handleScanFolder(): Promise<void> {
     setBusy(true)
     try {
-      const found = await window.api.scanFolder()
-      setCandidates(found)
+      reportScan(await window.api.scanFolder(), 'Scan Folder')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleRescanFolders(): Promise<void> {
+    setBusy(true)
+    try {
+      const result = await window.api.rescanFolders()
+      if (result.roots.length === 0) {
+        setInfoMessage({
+          title: 'Rescan Folders',
+          message: 'No folders have been scanned yet — use Scan Folder once and they will be remembered.'
+        })
+        return
+      }
+      reportScan(result, 'Rescan Folders')
     } finally {
       setBusy(false)
     }
@@ -1043,6 +1075,7 @@ export default function App(): JSX.Element {
         onViewModeChange={setViewMode}
         onAddGame={handleAddGame}
         onScanFolder={handleScanFolder}
+        onRescanFolders={handleRescanFolders}
         onImportSteam={handleImportSteam}
         onImportEpic={handleImportEpic}
         onImportGog={handleImportGog}

@@ -42,6 +42,15 @@ export interface GameCandidate {
   installDir: string
 }
 
+export interface FolderScanResult {
+  candidates: GameCandidate[]
+  /** Subfolders actually examined this run. */
+  scanned: number
+  /** Subfolders skipped because they're already in the library. */
+  skipped: number
+  roots: string[]
+}
+
 export interface ScanProgress {
   current: number
   total: number
@@ -70,6 +79,9 @@ export interface Settings {
   // How many archives to keep in the backup folder; older ones are deleted
   // after each successful backup. 0 means keep everything.
   backupKeepCount: number
+  /** Folders that have been scanned for games, so a rescan needs no picker
+      and can look only at subfolders that aren't in the library yet. */
+  scanRoots: string[]
   /** Folder the user keeps trainers in. Nothing is ever written there. */
   trainerFolder: string
   /** Also watch the OS Downloads folder, so a freshly downloaded trainer is
@@ -216,7 +228,8 @@ export interface GameApi {
   openDataFolder(): Promise<void>
   openGameFolder(id: string): Promise<void>
   addManual(): Promise<Game | null>
-  scanFolder(): Promise<GameCandidate[]>
+  scanFolder(): Promise<FolderScanResult>
+  rescanFolders(): Promise<FolderScanResult>
   onScanProgress(cb: (progress: ScanProgress | null) => void): () => void
   importCandidates(candidates: GameCandidate[]): Promise<Game[]>
   launch(id: string): Promise<void>

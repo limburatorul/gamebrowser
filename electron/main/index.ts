@@ -22,6 +22,7 @@ import type {
   ScreenshotSweepResult,
   SteamPlaytimeSyncResult,
   MetadataSweepResult,
+  FolderScanResult,
   DiskSizeSweepResult,
   TrainerScanResult
 } from '../../shared/types'
@@ -90,6 +91,7 @@ let settings: Settings = {
   backupEnabled: false,
   backupIntervalHours: 24,
   backupKeepCount: 5,
+  scanRoots: [],
   trainerFolder: '',
   watchDownloadsForTrainers: true,
   lastBackupAt: null,
@@ -1862,6 +1864,72 @@ async function launchGame(id: string): Promise<void> {
   helper.once('error', () => void finish())
 }
 
+async function rememberScanRoot(root: string): Promise<void> {
+  const key = root.replace(/[\\/]+$/, '').toLowerCase()
+  if (settings.scanRoots.some((r) => r.replace(/[\\/]+$/, '').toLowerCase() === key)) return
+  settings = { ...settings, scanRoots: [...settings.scanRoots, root] }
+  await saveSettingsToDisk()
+}
+
+/**
+ * Walks the given roots, examining only subfolders that aren't already in the
+ * library.
+ *
+ * The old version ran findBestExe - itself a depth-5 recursive walk - on every
+ * subfolder of the root, every time. On a folder holding 500-odd already
+ * imported games that meant re-walking the entire drive to find the three new
+ * ones, which is exactly what it felt like. An installDir is a stable identity
+ * for a folder-scanned game, so anything already claimed is skipped outright.
+ */
+async function scanRoots(roots: string[]): Promise<FolderScanResult> {
+  const known = new Set(games.map((g) => g.installDir.replace(/[\\/]+$/, '').toLowerCase()))
+  const candidates: GameCandidate[] = []
+  let scanned = 0
+  let skipped = 0
+
+  try {
+    // Counted up front so the progress bar reflects the real amount of work
+    // rather than restarting per root.
+    const pending: { root: string; name: string; full: string }[] = []
+    for (const root of roots) {
+      const entries = await safeReaddir(root)
+      if (!entries) continue
+      for (const entry of entries.filter((e) => e.isDirectory())) {
+        const full = join(root, entry.name)
+        if (known.has(full.replace(/[\\/]+$/, '').toLowerCase())) {
+          skipped++
+          continue
+        }
+        pending.push({ root, name: entry.name, full })
+      }
+    }
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i]
+      broadcastScanProgress({ current: i + 1, total: pending.length, currentName: item.name })
+      const exe = await findBestExe(item.full)
+      scanned++
+      if (exe) candidates.push({ name: cleanGameName(item.name), exePath: exe, installDir: item.full })
+    }
+
+    // A root that is itself a single game rather than a folder of games - only
+    // worth checking when it has no unclaimed subfolders to explain it.
+    if (candidates.length === 0 && pending.length === 0 && skipped === 0) {
+      for (const root of roots) {
+        if (known.has(root.replace(/[\\/]+$/, '').toLowerCase())) continue
+        broadcastScanProgress({ current: 1, total: 1, currentName: basename(root) })
+        const exe = await findBestExe(root)
+        scanned++
+        if (exe) candidates.push({ name: cleanGameName(basename(root)), exePath: exe, installDir: root })
+      }
+    }
+  } finally {
+    broadcastScanProgress(null)
+  }
+
+  return { candidates, scanned, skipped, roots: settings.scanRoots }
+}
+
 async function runBackup(): Promise<BackupResult> {
   if (!settings.backupFolder) return { ok: false, error: 'No backup folder set.', settings }
   try {
@@ -2080,37 +2148,20 @@ function registerIpcHandlers(): void {
     return game
   })
 
-  ipcMain.handle('games:scanFolder', async (): Promise<GameCandidate[]> => {
+  ipcMain.handle('games:scanFolder', async (): Promise<FolderScanResult> => {
     const result = await showOpenDialog({
       properties: ['openDirectory'],
       title: 'Select a folder containing your games'
     })
-    if (result.canceled || result.filePaths.length === 0) return []
-    const root = result.filePaths[0]
-    const entries = await safeReaddir(root)
-    if (!entries) return []
-    const subdirs = entries.filter((e) => e.isDirectory())
-    const candidates: GameCandidate[] = []
-    try {
-      if (subdirs.length > 0) {
-        for (let i = 0; i < subdirs.length; i++) {
-          const sub = subdirs[i]
-          broadcastScanProgress({ current: i + 1, total: subdirs.length, currentName: sub.name })
-          const full = join(root, sub.name)
-          const exe = await findBestExe(full)
-          if (exe) candidates.push({ name: cleanGameName(sub.name), exePath: exe, installDir: full })
-        }
-      }
-      if (candidates.length === 0) {
-        broadcastScanProgress({ current: 1, total: 1, currentName: basename(root) })
-        const exe = await findBestExe(root)
-        if (exe) candidates.push({ name: cleanGameName(basename(root)), exePath: exe, installDir: root })
-      }
-    } finally {
-      broadcastScanProgress(null)
+    if (result.canceled || result.filePaths.length === 0) {
+      return { candidates: [], scanned: 0, skipped: 0, roots: settings.scanRoots }
     }
-    return candidates
+    const root = result.filePaths[0]
+    await rememberScanRoot(root)
+    return scanRoots([root])
   })
+
+  ipcMain.handle('games:rescanFolders', async (): Promise<FolderScanResult> => scanRoots(settings.scanRoots))
 
   ipcMain.handle('games:importCandidates', async (_e, candidates: GameCandidate[]): Promise<Game[]> => {
     const created: Game[] = []

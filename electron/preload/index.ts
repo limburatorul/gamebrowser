@@ -25,6 +25,7 @@ const api: GameApi = {
   openGameFolder: (id: string) => ipcRenderer.invoke('games:openFolder', id),
   addManual: () => ipcRenderer.invoke('games:addManual'),
   scanFolder: () => ipcRenderer.invoke('games:scanFolder'),
+  rescanFolders: () => ipcRenderer.invoke('games:rescanFolders'),
   onScanProgress: (cb: (progress: ScanProgress | null) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, progress: ScanProgress | null): void => cb(progress)
     ipcRenderer.on('scan:progress', listener)

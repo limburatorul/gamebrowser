@@ -637,6 +637,7 @@ export default function SettingsDialog({
                 backupEnabled,
                 backupIntervalHours,
                 backupKeepCount,
+                scanRoots: initial.scanRoots,
                 trainerFolder: initial.trainerFolder,
                 watchDownloadsForTrainers,
                 lastBackupAt: initial.lastBackupAt,
