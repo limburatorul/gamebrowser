@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, net, Menu, shell, screen } from 'electron'
-import { join, dirname, basename, extname } from 'path'
+import { join, dirname, basename, extname, parse as parsePath } from 'path'
 import { promises as fs, watch, type Dirent } from 'fs'
 import { randomUUID } from 'crypto'
 import { fork, execFile, spawn, type ChildProcess } from 'child_process'
@@ -26,7 +26,10 @@ import type {
   DiskSizeSweepResult,
   TrainerScanResult,
   TrainerFileInfo,
-  DuplicateGroup
+  DuplicateGroup,
+  DriveUsage,
+  MissingGameEntry,
+  MissingScanResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -1970,6 +1973,174 @@ function findDuplicateGroups(): DuplicateGroup[] {
   return groups.sort((a, b) => (b.reclaimableBytes ?? 0) - (a.reclaimableBytes ?? 0))
 }
 
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The volume a path lives on, as a comparable key: `D:\`, or a UNC share root.
+ *
+ * Separators are normalised first: Windows accepts either, and the library
+ * really does hold both spellings (`G:\SteamLibrary\…` next to
+ * `G:/XBOX/Anno 1800/`), which `path.parse` would otherwise report as the two
+ * distinct roots `G:\` and `G:/` — one drive showing up as two.
+ */
+function driveRootOf(p: string): string {
+  return parsePath(p.replace(/\//g, '\\')).root.toUpperCase()
+}
+
+interface DriveSpace {
+  totalBytes: number
+  freeBytes: number
+  driveType: string
+}
+
+/**
+ * Capacity and free space for every ready volume, in one shot.
+ *
+ * Deliberately *not* `fs.statfs`: this Electron's Node clamps its `blocks`
+ * field to 32 bits on Windows, so every volume over 4 TiB reports exactly
+ * 4 TiB. It's a quiet wrong answer rather than an error - `bavail` is usually
+ * under the ceiling, so free space stays correct while the total is nonsense -
+ * and this user's game library lives on a 26 TB share. .NET's DriveInfo
+ * returns real Int64 sizes, and throws in the drive type for free.
+ */
+async function readDriveSpace(): Promise<Map<string, DriveSpace>> {
+  const spaces = new Map<string, DriveSpace>()
+  try {
+    const script =
+      '[System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady } | ForEach-Object ' +
+      '{ "{0}|{1}|{2}|{3}" -f $_.Name, $_.TotalSize, $_.AvailableFreeSpace, $_.DriveType }'
+    // Timed out rather than awaited indefinitely: IsReady blocks on a dead
+    // network mapping, and this runs when the dashboard opens.
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { windowsHide: true, timeout: 8000 }
+    )
+    for (const line of stdout.split(/\r?\n/)) {
+      const [name, total, free, type] = line.trim().split('|')
+      const totalBytes = Number(total)
+      const freeBytes = Number(free)
+      if (!name || !Number.isFinite(totalBytes) || !Number.isFinite(freeBytes)) continue
+      spaces.set(name.toUpperCase(), { totalBytes, freeBytes, driveType: type ?? '' })
+    }
+  } catch {
+    // PowerShell missing or too slow; the caller falls back to statfs
+  }
+  return spaces
+}
+
+/**
+ * Disk usage per drive, so "the games drive is nearly full" becomes a number
+ * against a specific volume rather than one library-wide total. Sizes come
+ * from the background sweep; free space is read live.
+ */
+async function computeDriveUsage(): Promise<DriveUsage[]> {
+  const byRoot = new Map<string, DriveUsage>()
+  for (const game of games) {
+    const root = driveRootOf(game.installDir)
+    if (!root) continue
+    let entry = byRoot.get(root)
+    if (!entry) {
+      entry = {
+        root,
+        gameCount: 0,
+        gameBytes: 0,
+        unmeasured: 0,
+        neverPlayedBytes: 0,
+        totalBytes: null,
+        freeBytes: null,
+        driveType: ''
+      }
+      byRoot.set(root, entry)
+    }
+    entry.gameCount++
+    if (game.installSizeBytes === null) entry.unmeasured++
+    else {
+      entry.gameBytes += game.installSizeBytes
+      if (game.playtimeSeconds === 0) entry.neverPlayedBytes += game.installSizeBytes
+    }
+  }
+
+  const spaces = await readDriveSpace()
+  await Promise.all(
+    [...byRoot.values()].map(async (entry) => {
+      const known = spaces.get(entry.root)
+      if (known) {
+        entry.totalBytes = known.totalBytes
+        entry.freeBytes = known.freeBytes
+        entry.driveType = known.driveType
+        return
+      }
+      try {
+        const stat = await fs.statfs(entry.root)
+        // See readDriveSpace: `blocks` sitting exactly at the 32-bit ceiling
+        // means the real volume is bigger than this can express. Leave the
+        // numbers null so the UI says nothing rather than something wrong.
+        if (stat.blocks >= 0xffffffff) return
+        entry.totalBytes = stat.blocks * stat.bsize
+        // bavail, not bfree: what this user can actually write to.
+        entry.freeBytes = stat.bavail * stat.bsize
+      } catch {
+        // drive unplugged or not ready; the counts above still stand
+      }
+    })
+  )
+
+  return [...byRoot.values()].sort((a, b) => b.gameBytes - a.gameBytes)
+}
+
+/**
+ * Library entries whose executable is no longer on disk - games deleted
+ * outside the app, which otherwise sit there looking fine until Play does
+ * nothing.
+ *
+ * Each volume is probed once *before* its games are, and everything on an
+ * unreachable one is skipped: an unplugged drive would otherwise report every
+ * game on it as missing, and this list is offered to the user for deletion.
+ */
+async function scanMissingGames(): Promise<MissingScanResult> {
+  const result: MissingScanResult = {
+    totalGames: games.length,
+    checked: 0,
+    entries: [],
+    offlineRoots: []
+  }
+
+  try {
+    const offline = new Set<string>()
+    for (const root of new Set(games.map((g) => driveRootOf(g.installDir)).filter(Boolean))) {
+      if (!(await pathExists(root))) offline.add(root)
+    }
+    result.offlineRoots = [...offline].sort()
+
+    const entries: MissingGameEntry[] = []
+    for (const game of games) {
+      if (offline.has(driveRootOf(game.installDir))) continue
+      result.checked++
+      if (await pathExists(game.exePath)) continue
+      entries.push({
+        id: game.id,
+        name: game.name,
+        exePath: game.exePath,
+        installDir: game.installDir,
+        source: game.source,
+        folderMissing: !(await pathExists(game.installDir))
+      })
+    }
+    result.entries = entries.sort((a, b) => a.name.localeCompare(b.name))
+    return result
+  } catch (e) {
+    return { ...result, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 async function rememberScanRoot(root: string): Promise<void> {
   const key = root.replace(/[\\/]+$/, '').toLowerCase()
   if (settings.scanRoots.some((r) => r.replace(/[\\/]+$/, '').toLowerCase() === key)) return
@@ -2716,6 +2887,10 @@ function registerIpcHandlers(): void {
   )
 
   ipcMain.handle('games:duplicates', async (): Promise<DuplicateGroup[]> => findDuplicateGroups())
+
+  ipcMain.handle('storage:drives', async (): Promise<DriveUsage[]> => computeDriveUsage())
+
+  ipcMain.handle('games:scanMissing', async (): Promise<MissingScanResult> => scanMissingGames())
 
   ipcMain.handle('trainers:launch', async (_e, id: string): Promise<{ ok: boolean; error?: string }> => {
     const game = games.find((g) => g.id === id)
