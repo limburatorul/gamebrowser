@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.33.0',
+    changes: [
+      'List view now looks like the rest of the program. A selected row is marked with a bar down its leading edge instead of a full outline, which across a wide row looked like a text box.',
+      'Rows are separated by a hairline, so the eye can follow one from the name across to the playtime at the far right, and the numbers line up in proper columns.',
+      'New: hovering a row shows a play button over its thumbnail, the same as the grid.'
+    ]
+  },
+  {
     version: '1.32.0',
     changes: [
       'New: list view has column headings — Name, Genres, Size, Last played, Playtime — and they stay put at the top while you scroll.'

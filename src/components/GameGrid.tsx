@@ -290,6 +290,29 @@ function ListRow({
     >
       <div className="list-row-cover">
         <CoverImage game={game} className="cover-img" />
+        {/* The grid puts a play button on the cover at hover; without one here
+            the two view modes behaved differently for no reason. */}
+        {!running && (
+          <button
+            className="list-play-btn"
+            title="Play"
+            onClick={(e) => {
+              e.stopPropagation()
+              onLaunch(game.id)
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <polygon
+                points="7.2,6 17.8,12 7.2,18"
+                fill="currentColor"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
       </div>
       <div className="list-row-name">
         {game.name}
