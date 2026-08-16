@@ -1523,12 +1523,12 @@ input[type='checkbox']:focus-visible {
      mostly label-and-control rows, and at 460 the labels were crowding their
      sliders and the explanatory paragraphs ran very narrow. */
   width: 690px;
-  /* Glass, like the topbar, the details bar and the card highlight. The
-     overlay behind it already dims the window, so this reads as depth rather
-     than as a hole in the dialog. */
-  background: rgba(23, 24, 27, 0.86);
-  backdrop-filter: blur(20px) saturate(1.25);
-  -webkit-backdrop-filter: blur(20px) saturate(1.25);
+  /* Glass, like the topbar, the details bar and the card highlight, and
+     tunable from Appearance the same way they are. The overlay behind it
+     already dims the window, so this reads as depth rather than as a hole. */
+  background: rgba(23, 24, 27, var(--settings-alpha, 0.86));
+  backdrop-filter: blur(var(--settings-blur, 20px)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--settings-blur, 20px)) saturate(1.25);
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
 }
@@ -1614,6 +1614,24 @@ input[type='checkbox']:focus-visible {
   margin-top: auto;
   padding-top: 16px;
   border-top: 1px solid var(--border);
+}
+
+/* Settings only. Its lists now run to full length and the dialog scrolls, so
+   Cancel/Save would scroll off the end and leave no way to save without
+   paging back down. The negative margins pull it out to the modal's padding
+   edges - including the 20px at the bottom, hence bottom: -20px - so the bar
+   spans the full width and sits flush with the end of the dialog. */
+.settings-modal .modal-actions {
+  position: sticky;
+  bottom: -20px;
+  z-index: 2;
+  margin: auto -20px -20px;
+  padding: 12px 20px;
+  /* A touch more opaque than the dialog itself so the buttons stay legible
+     over whatever is scrolling underneath them. */
+  background: rgba(23, 24, 27, calc(var(--settings-alpha, 0.86) + 0.08));
+  backdrop-filter: blur(var(--settings-blur, 20px)) saturate(1.25);
+  -webkit-backdrop-filter: blur(var(--settings-blur, 20px)) saturate(1.25);
 }
 
 .whats-new-modal {
@@ -2066,12 +2084,14 @@ input[type='checkbox']:focus-visible {
   color: var(--danger);
 }
 
+/* No max-height and no scroller of its own: the list shows every backup and
+   the dialog itself scrolls. A 160px box inside an already-scrolling dialog
+   meant two nested scrollbars and only three or four archives visible at a
+   time. */
 .backup-list {
   list-style: none;
   margin: 0 0 16px;
   padding: 0;
-  max-height: 160px;
-  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -2342,12 +2362,12 @@ input[type='checkbox']:focus-visible {
   line-height: 1;
 }
 
+/* Same as .backup-list: every entry is shown and the dialog does the
+   scrolling, rather than a short box scrolling inside a scrolling dialog. */
 .hidden-list {
   list-style: none;
   margin: 8px 0 12px;
   padding: 0;
-  max-height: 320px;
-  overflow-y: auto;
 }
 
 .hidden-entry {

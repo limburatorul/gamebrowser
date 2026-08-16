@@ -1127,6 +1127,8 @@ export default function App(): JSX.Element {
           '--details-blur': `${uiPrefs.detailsBarBlur}px`,
           '--tile-highlight-alpha': String(uiPrefs.tileHighlightOpacity),
           '--tile-highlight-blur': `${uiPrefs.tileHighlightBlur}px`,
+          '--settings-alpha': String(uiPrefs.settingsOpacity),
+          '--settings-blur': `${uiPrefs.settingsBlur}px`,
           '--accent': uiPrefs.accentColor,
           '--accent-dim': mixHex(uiPrefs.accentColor, '#10131a', 0.45),
           '--accent-light': mixHex(uiPrefs.accentColor, '#ffffff', 0.22),

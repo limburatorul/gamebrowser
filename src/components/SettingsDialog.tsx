@@ -264,8 +264,36 @@ export default function SettingsDialog({
               <span className="settings-slider-value">{uiPrefs.tileHighlightBlur}px</span>
             </div>
 
+            <div className="settings-slider-row">
+              <span className="settings-slider-label">This window — transparency</span>
+              <input
+                type="range"
+                min={30}
+                max={100}
+                step={5}
+                value={Math.round(uiPrefs.settingsOpacity * 100)}
+                onChange={(e) => setPref('settingsOpacity', Number(e.target.value) / 100)}
+              />
+              <span className="settings-slider-value">{Math.round(uiPrefs.settingsOpacity * 100)}%</span>
+            </div>
+
+            <div className="settings-slider-row">
+              <span className="settings-slider-label">This window — blur</span>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                step={1}
+                value={uiPrefs.settingsBlur}
+                onChange={(e) => setPref('settingsBlur', Number(e.target.value))}
+              />
+              <span className="settings-slider-value">{uiPrefs.settingsBlur}px</span>
+            </div>
+
             <p className="settings-note">
-              The card highlight is the frame behind a game card when it is hovered or selected.
+              The card highlight is the frame behind a game card when it is hovered or selected. &ldquo;This
+              window&rdquo; is the Settings dialog itself — drag either slider and you will see it change under your
+              cursor. It does not go fully transparent, since the controls have to stay readable.
             </p>
 
             <p className="settings-note">Appearance changes apply instantly and are saved automatically.</p>

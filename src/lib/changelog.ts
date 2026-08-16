@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.37.0',
+    changes: [
+      'The backup list and the hidden games list are no longer small boxes with their own scrollbar — they show every entry, and Settings itself scrolls.',
+      'Cancel and Save stay pinned to the bottom of Settings, so a long list cannot push them out of reach.',
+      'New: transparency and blur sliders for the Settings window itself, in Appearance, alongside the ones for the top bar and the details bar.'
+    ]
+  },
+  {
     version: '1.36.0',
     changes: [
       'The library now scrolls underneath the top bar and the bar at the bottom, so the cover art moves behind their glass instead of stopping short of it. The scrollbar still stays between the two, where you can reach it.',
