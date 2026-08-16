@@ -43,6 +43,7 @@ interface Props {
   onSelectGame: (id: string) => void
   onOpenAbout: () => void
   onOpenDashboard: () => void
+  onOpenWhatToPlay: () => void
 }
 
 const ITEMS: { key: LibraryFilter; label: string; icon: JSX.Element | string }[] = [
@@ -77,7 +78,8 @@ export default function Sidebar({
   selectedIds,
   onSelectGame,
   onOpenAbout,
-  onOpenDashboard
+  onOpenDashboard,
+  onOpenWhatToPlay
 }: Props): JSX.Element {
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -172,6 +174,19 @@ export default function Sidebar({
             </button>
           </li>
         ))}
+        <li>
+          <button
+            className="sidebar-item"
+            title="Suggests something from your unplayed games, based on the genres you actually spend time on"
+            onClick={onOpenWhatToPlay}
+          >
+            <span className="sidebar-icon" data-key="what-to-play">
+              🎲
+            </span>
+            <span>What to Play</span>
+            <span className="sidebar-count"></span>
+          </button>
+        </li>
         <li>
           <button className="sidebar-item" onClick={onOpenDashboard}>
             <span className="sidebar-icon">▤</span>

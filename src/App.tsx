@@ -29,6 +29,7 @@ import ContextMenu from './components/ContextMenu'
 import DetailsPanel from './components/DetailsPanel'
 import AboutDialog from './components/AboutDialog'
 import DashboardDialog from './components/DashboardDialog'
+import WhatToPlayDialog from './components/WhatToPlayDialog'
 import UpdateDialog from './components/UpdateDialog'
 import WhatsNewDialog from './components/WhatsNewDialog'
 import Backdrop from './components/Backdrop'
@@ -96,6 +97,7 @@ export default function App(): JSX.Element {
   const [contextMenu, setContextMenu] = useState<{ gameId: string; x: number; y: number } | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [dashboardOpen, setDashboardOpen] = useState(false)
+  const [whatToPlayOpen, setWhatToPlayOpen] = useState(false)
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
@@ -218,6 +220,7 @@ export default function App(): JSX.Element {
     infoMessage !== null ||
     aboutOpen ||
     dashboardOpen ||
+    whatToPlayOpen ||
     updateCheck !== null ||
     whatsNew !== null
 
@@ -1201,6 +1204,7 @@ export default function App(): JSX.Element {
           }}
           onOpenAbout={() => setAboutOpen(true)}
           onOpenDashboard={() => setDashboardOpen(true)}
+          onOpenWhatToPlay={() => setWhatToPlayOpen(true)}
         />
         <main className="main">
           <GameGrid
@@ -1347,6 +1351,16 @@ export default function App(): JSX.Element {
         />
       )}
       {dashboardOpen && <DashboardDialog games={games} onClose={() => setDashboardOpen(false)} />}
+      {whatToPlayOpen && (
+        <WhatToPlayDialog
+          games={games}
+          onClose={() => setWhatToPlayOpen(false)}
+          onLaunch={(id) => {
+            setWhatToPlayOpen(false)
+            handleLaunch(id)
+          }}
+        />
+      )}
       {updateCheck?.available && updateCheck.latestVersion && (
         <UpdateDialog
           currentVersion={updateCheck.currentVersion}

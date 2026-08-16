@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.38.0',
+    changes: [
+      'New: "What to Play" in the sidebar suggests something from the games you have never played, chosen by the genres you actually spend time on — and it tells you which ones, so the pick never looks arbitrary.',
+      'It reads your playtime fresh every time, so after a Steam sync or an evening on something new the suggestions have already moved with you. A game\'s hours are split across its genres, so one tagged with six of them does not count six times, and anything set to "ignore playtime" stays out of it.',
+      'Press "Pick another" for a different one — it will not circle back to something you just saw — or take one of the three alternatives listed underneath.'
+    ]
+  },
+  {
     version: '1.37.0',
     changes: [
       'The backup list and the hidden games list are no longer small boxes with their own scrollbar — they show every entry, and Settings itself scrolls.',

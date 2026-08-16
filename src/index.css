@@ -687,6 +687,10 @@ input[type='checkbox']:focus-visible {
   color: #e88aa8;
 }
 
+.sidebar-icon[data-key='what-to-play'] {
+  color: #b48ef0;
+}
+
 .sidebar-icon svg {
   display: block;
   margin: 0 auto;
@@ -2364,6 +2368,157 @@ input[type='checkbox']:focus-visible {
 
 /* Same as .backup-list: every entry is shown and the dialog does the
    scrolling, rather than a short box scrolling inside a scrolling dialog. */
+.whattoplay-modal {
+  width: 520px;
+}
+
+.whattoplay-pick {
+  display: flex;
+  gap: 14px;
+  margin: 12px 0 14px;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.whattoplay-cover {
+  width: 92px;
+  height: 129px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  position: relative;
+}
+
+.whattoplay-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whattoplay-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.whattoplay-genres {
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.whattoplay-why {
+  font-size: 12.5px;
+  color: var(--text-1);
+}
+
+.whattoplay-why strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.whattoplay-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.whattoplay-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.whattoplay-alts {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.whattoplay-alt {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 10px;
+  margin-bottom: 6px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.whattoplay-alt:hover {
+  background: var(--bg-2);
+}
+
+.whattoplay-alt-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whattoplay-alt-why {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.whattoplay-profile {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.whattoplay-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.whattoplay-profile-genre {
+  width: 130px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.whattoplay-profile-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.whattoplay-profile-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.55), var(--accent));
+}
+
+.whattoplay-profile-value {
+  width: 64px;
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
 .hidden-list {
   list-style: none;
   margin: 8px 0 12px;
