@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Game } from '@shared/types'
 import CoverImage from './CoverImage'
 import StarRating from './StarRating'
@@ -40,6 +41,12 @@ export default function GameDetails({
   onUninstall,
   onDeleteFromDisk
 }: Props): JSX.Element {
+  const [moreOpen, setMoreOpen] = useState(false)
+  const run = (fn: (id: string) => void): void => {
+    setMoreOpen(false)
+    fn(game.id)
+  }
+
   return (
     <div className={`details-bar ${visible ? '' : 'details-bar-hidden'}`}>
       <div className="details-cover">
@@ -100,18 +107,44 @@ export default function GameDetails({
         <button className="btn" onClick={() => onEdit(game.id)}>
           Edit
         </button>
-        {PLATFORM_SOURCES.has(game.source) ? (
-          <button className="btn" onClick={() => onUninstall(game.id)}>
-            Uninstall
+        {/* Uninstall, Delete from Disk and Remove used to sit inline, the last
+            two in red, one button away from Edit. Tucking them behind a menu
+            shortens a row of eight equal-weight buttons and puts a deliberate
+            step in front of the destructive ones. */}
+        <div className="import-menu-wrapper">
+          <button
+            className="btn details-more-btn"
+            title="More actions"
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((v) => !v)}
+          >
+            ⋯
           </button>
-        ) : (
-          <button className="btn btn-danger" onClick={() => onDeleteFromDisk(game.id)}>
-            Delete from Disk
-          </button>
-        )}
-        <button className="btn btn-danger" onClick={() => onRemove(game.id)}>
-          Remove
-        </button>
+          {moreOpen && (
+            <>
+              <div className="import-menu-overlay" onClick={() => setMoreOpen(false)} />
+              <div className="import-menu details-more-menu">
+                {PLATFORM_SOURCES.has(game.source) ? (
+                  <button className="import-menu-item" onClick={() => run(onUninstall)}>
+                    <span className="import-menu-icon">⊘</span>
+                    <span>Uninstall</span>
+                  </button>
+                ) : (
+                  <button className="import-menu-item is-danger" onClick={() => run(onDeleteFromDisk)}>
+                    <span className="import-menu-icon">🗑</span>
+                    <span>Delete from Disk</span>
+                  </button>
+                )}
+                <div className="import-menu-separator" />
+                <button className="import-menu-item is-danger" onClick={() => run(onRemove)}>
+                  <span className="import-menu-icon">✕</span>
+                  <span>Remove from library</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.34.0',
+    changes: [
+      'The sliders and tick boxes are no longer the plain Windows ones — Settings alone showed ten of them — so the whole window now looks like one program.',
+      'The playtime bars in the sidebar have a visible track again instead of looking like loose dashes, and each filter in the sidebar has its own colour.',
+      'Uninstall, Delete from Disk and Remove have moved out of the bottom bar into a "⋯" menu, so they are no longer one button away from Edit.',
+      'The Dashboard totals sit in an even grid rather than spilling onto a second row at double width, and the bars fade down the ranking instead of all being the same flat blue.'
+    ]
+  },
+  {
     version: '1.33.0',
     changes: [
       'List view now looks like the rest of the program. A selected row is marked with a bar down its leading edge instead of a full outline, which across a wide row looked like a text box.',

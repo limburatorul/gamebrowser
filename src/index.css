@@ -48,6 +48,94 @@ select {
   color: inherit;
 }
 
+/* Range sliders and checkboxes, styled for the same reason the <select>s were:
+   the native Windows controls are the last things in here that look like they
+   came from another decade, and Settings alone shows ten sliders at once.
+   Electron-only, so the -webkit- pseudo-elements are always available - the
+   same reasoning as the custom scrollbars. */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  /* Half the thumb minus half the track, to sit it on the centre line. */
+  margin-top: -5px;
+  border-radius: 50%;
+  background: var(--accent);
+  /* Ring in the panel colour so the thumb reads as separate from the track
+     rather than merging with it at the ends. */
+  border: 2px solid var(--bg-1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+input[type='range']:active::-webkit-slider-thumb,
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 5px rgba(var(--accent-rgb), 0.22);
+}
+
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-2);
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+/* The tick is a clipped square rather than a glyph, so it scales cleanly and
+   needs no font. */
+input[type='checkbox']::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  transform: scale(0);
+  transition: transform 120ms ease;
+  clip-path: polygon(14% 46%, 0 60%, 39% 100%, 100% 22%, 86% 8%, 39% 72%);
+}
+
+input[type='checkbox']:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+input[type='checkbox']:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+
+input[type='checkbox']:focus-visible {
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.3);
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -567,6 +655,38 @@ select {
   opacity: 0.85;
 }
 
+/* A colour per filter, so the column reads as a set of distinct things rather
+   than one grey list. Deliberately muted - these sit behind the labels, they
+   are not the point. Glyphs Windows renders as colour emoji (the picture
+   frame, the bolt) ignore `color` and keep their own, which is fine. */
+.sidebar-icon[data-key] {
+  opacity: 1;
+}
+
+.sidebar-icon[data-key='all'] {
+  color: #8ab4f8;
+}
+
+.sidebar-icon[data-key='recent'] {
+  color: #5fd4c4;
+}
+
+.sidebar-icon[data-key='never-played'] {
+  color: #9aa0b4;
+}
+
+.sidebar-icon[data-key='has-trainer'] {
+  color: #f0b429;
+}
+
+.sidebar-icon[data-key='favorites'] {
+  color: #f5c542;
+}
+
+.sidebar-icon[data-key='no-cover'] {
+  color: #e88aa8;
+}
+
 .sidebar-icon svg {
   display: block;
   margin: 0 auto;
@@ -695,20 +815,26 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* The track was --bg-3, which is a couple of shades off the sidebar itself and
+   therefore invisible - so the bars read as loose blue dashes rather than as
+   filled meters. Translucent white sits on whatever the sidebar colour is,
+   which is user-configurable. */
 .sidebar-playtime-track {
   display: block;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--bg-3);
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
 }
 
 .sidebar-playtime-bar {
   display: block;
   height: 100%;
-  border-radius: 2px;
-  background: var(--accent);
+  border-radius: 3px;
+  /* Derived from --accent-rgb, never a fixed colour: the accent is a user
+     setting, and a hardcoded shade would break the moment they change it. */
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.55), var(--accent));
 }
 
 .sidebar-footer {
@@ -1845,12 +1971,19 @@ select {
   width: 480px;
 }
 
-.dashboard-totals {
-  flex-wrap: wrap;
+/* A fixed three-column grid instead of wrapping flex. With six tiles, flex
+   put four on the first row and stretched the remaining two to double width,
+   which looked like a mistake rather than a layout.
+   Both class names are needed: .about-stats is defined further down the file
+   and would otherwise win `display: flex` on equal specificity. */
+.about-stats.dashboard-totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .dashboard-totals .about-stat {
-  min-width: 96px;
+  min-width: 0;
 }
 
 .dashboard-bar-list {
@@ -2165,6 +2298,29 @@ select {
 .edit-trainer-select {
   width: 100%;
   max-width: 100%;
+}
+
+/* The details bar sits at the bottom of the window, so its menu opens upward
+   instead of down. */
+.details-more-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+  left: auto;
+  right: 0;
+  min-width: 200px;
+}
+
+.details-more-btn {
+  padding: 7px 12px;
+  line-height: 1;
+}
+
+.import-menu-item.is-danger {
+  color: var(--danger);
+}
+
+.import-menu-item.is-danger:hover {
+  background: rgba(229, 72, 77, 0.14);
 }
 
 .import-menu-separator {
