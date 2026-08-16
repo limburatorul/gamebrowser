@@ -57,6 +57,11 @@ const api: GameApi = {
   sweepMetadataNow: () => ipcRenderer.invoke('metadata:sweepNow'),
   measureDiskSizesNow: () => ipcRenderer.invoke('sizes:measureNow'),
   pickTrainerFolder: () => ipcRenderer.invoke('trainers:pickFolder'),
+  pickTrainerMirrorFolder: () => ipcRenderer.invoke('trainers:pickMirrorFolder'),
+  listTrainerFiles: () => ipcRenderer.invoke('trainers:list'),
+  assignTrainer: (gameId: string, sourcePath: string | null) =>
+    ipcRenderer.invoke('trainers:assign', gameId, sourcePath),
+  getDuplicateGroups: () => ipcRenderer.invoke('games:duplicates'),
   scanTrainers: () => ipcRenderer.invoke('trainers:scan'),
   launchTrainer: (id: string) => ipcRenderer.invoke('trainers:launch', id),
   launchWithTrainer: (id: string) => ipcRenderer.invoke('trainers:launchWithGame', id),

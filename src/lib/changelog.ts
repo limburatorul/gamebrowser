@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.28.0',
+    changes: [
+      'New: the Dashboard lists games installed in more than one place, with the full path and size of each copy, and how much space dropping the smaller ones would free. Nothing is deleted for you — the point is to let you decide which copy to keep.',
+      'New: launch options per game in the Edit dialog — command-line arguments and a run-as-administrator switch. Playtime is not measured for elevated launches, since the game then runs outside this app\'s reach.',
+      'New: a trainer can be picked by hand in the Edit dialog when automatic matching missed it or chose the wrong file.',
+      'New: matched trainers can also be copied to a second folder of your choosing, alongside the app\'s own copy.'
+    ]
+  },
+  {
     version: '1.27.0',
     changes: [
       'Scanning a folder now skips the games it has already imported from it, instead of digging through every subfolder again to find the few new ones. On a folder holding 536 games it went from working through all of them to looking at 28 and finishing in under three seconds.',

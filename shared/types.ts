@@ -25,6 +25,10 @@ export interface Game {
   sizeMeasuredAt: string | null
   /** Matched from the local trainer folder, never downloaded automatically. */
   trainerPath: string | null
+  /** Extra command-line arguments passed to the game's executable. */
+  launchArgs: string
+  /** Launch elevated. Costs playtime tracking - see launchGame. */
+  runAsAdmin: boolean
   steamAppId: number | null
   epicAppName: string | null
   gogProductId: string | null
@@ -84,6 +88,9 @@ export interface Settings {
   scanRoots: string[]
   /** Folder the user keeps trainers in. Nothing is ever written there. */
   trainerFolder: string
+  /** Optional second destination: matched trainers are mirrored here as well
+      as into the app's own folder, so the user keeps a tidy copy of their own. */
+  trainerMirrorFolder: string
   /** Also watch the OS Downloads folder, so a freshly downloaded trainer is
       filed away without the user going back to Settings to rescan. */
   watchDownloadsForTrainers: boolean
@@ -144,6 +151,20 @@ export interface ScreenshotSweepResult {
   noMatch: number
   rateLimited: boolean
   retryAfter: string | null
+}
+
+export interface TrainerFileInfo {
+  fileName: string
+  path: string
+  /** True when some game already points at this file. */
+  assigned: boolean
+}
+
+export interface DuplicateGroup {
+  name: string
+  copies: { id: string; name: string; installDir: string; source: Game['source']; sizeBytes: number | null }[]
+  /** Disk freed by keeping only the largest copy; null until sizes are known. */
+  reclaimableBytes: number | null
 }
 
 export interface TrainerScanResult {
@@ -238,7 +259,15 @@ export interface GameApi {
     patch: Partial<
       Pick<
         Game,
-        'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId' | 'excludeFromPlaytime'
+        | 'name'
+        | 'favorite'
+        | 'tags'
+        | 'rating'
+        | 'categoryIds'
+        | 'steamAppId'
+        | 'excludeFromPlaytime'
+        | 'launchArgs'
+        | 'runAsAdmin'
       >
     >
   ): Promise<Game | null>
@@ -276,7 +305,11 @@ export interface GameApi {
   sweepMetadataNow(): Promise<MetadataSweepResult>
   measureDiskSizesNow(): Promise<DiskSizeSweepResult>
   pickTrainerFolder(): Promise<string | null>
+  pickTrainerMirrorFolder(): Promise<string | null>
   scanTrainers(): Promise<TrainerScanResult>
+  listTrainerFiles(): Promise<TrainerFileInfo[]>
+  assignTrainer(gameId: string, sourcePath: string | null): Promise<Game | null>
+  getDuplicateGroups(): Promise<DuplicateGroup[]>
   launchTrainer(id: string): Promise<{ ok: boolean; error?: string }>
   launchWithTrainer(id: string): Promise<{ ok: boolean; error?: string }>
   openTrainerSearch(id: string): Promise<void>

@@ -24,7 +24,9 @@ import type {
   MetadataSweepResult,
   FolderScanResult,
   DiskSizeSweepResult,
-  TrainerScanResult
+  TrainerScanResult,
+  TrainerFileInfo,
+  DuplicateGroup
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -93,6 +95,7 @@ let settings: Settings = {
   backupKeepCount: 5,
   scanRoots: [],
   trainerFolder: '',
+  trainerMirrorFolder: '',
   watchDownloadsForTrainers: true,
   lastBackupAt: null,
   librarySyncEnabled: true
@@ -113,6 +116,8 @@ async function loadLibrary(): Promise<void> {
       installSizeBytes: g.installSizeBytes ?? null,
       sizeMeasuredAt: g.sizeMeasuredAt ?? null,
       trainerPath: g.trainerPath ?? null,
+      launchArgs: g.launchArgs ?? '',
+      runAsAdmin: g.runAsAdmin ?? false,
       steamAppId: g.steamAppId ?? null,
       epicAppName: g.epicAppName ?? null,
       gogProductId: g.gogProductId ?? null,
@@ -1307,6 +1312,8 @@ async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]
       installSizeBytes: null,
       sizeMeasuredAt: null,
       trainerPath: null,
+      launchArgs: '',
+      runAsAdmin: false,
       steamAppId: g.appId,
       epicAppName: null,
       gogProductId: null,
@@ -1362,6 +1369,8 @@ async function addNewEpicGames(installed: EpicManifest[]): Promise<Game[]> {
       installSizeBytes: null,
       sizeMeasuredAt: null,
       trainerPath: null,
+      launchArgs: '',
+      runAsAdmin: false,
       steamAppId: null,
       epicAppName: m.appName,
       gogProductId: null,
@@ -1403,6 +1412,8 @@ async function addNewGogGames(installed: GogGame[]): Promise<Game[]> {
       installSizeBytes: null,
       sizeMeasuredAt: null,
       trainerPath: null,
+      launchArgs: '',
+      runAsAdmin: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: g.productId,
@@ -1484,6 +1495,8 @@ async function addNewUbisoftGames(installed: InstalledUbisoftGame[]): Promise<Ga
       installSizeBytes: null,
       sizeMeasuredAt: null,
       trainerPath: null,
+      launchArgs: '',
+      runAsAdmin: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -1705,6 +1718,29 @@ async function syncSteamPlaytime(): Promise<SteamPlaytimeSyncResult> {
  * Nothing is fetched from the internet here - see the note on
  * `trainerSearchUrl`; the app opens the site in the user's browser instead.
  */
+/**
+ * Optional second home for a matched trainer. The copy in userData is the one
+ * the app uses and backs up; this is purely the user's own tidy collection, so
+ * a failure here never fails the scan.
+ */
+async function mirrorTrainerFile(sourcePath: string, fileName: string): Promise<void> {
+  const folder = settings.trainerMirrorFolder
+  if (!folder) return
+  try {
+    await fs.mkdir(folder, { recursive: true })
+    const dest = join(folder, fileName)
+    try {
+      const [src, existing] = await Promise.all([fs.stat(sourcePath), fs.stat(dest)])
+      if (src.size === existing.size) return
+    } catch {
+      // not there yet, or unreadable - copy below
+    }
+    await copyFileAtomic(sourcePath, dest)
+  } catch {
+    // mirror folder unwritable; the real copy in userData is unaffected
+  }
+}
+
 async function scanTrainers(): Promise<TrainerScanResult> {
   const folder = settings.trainerFolder
   const result: TrainerScanResult = { folder, trainerFiles: 0, matched: 0, unmatchedFiles: 0 }
@@ -1772,6 +1808,7 @@ async function scanTrainers(): Promise<TrainerScanResult> {
           game.trainerPath = dest
           changed = true
         }
+        await mirrorTrainerFile(dest, match.fileName)
         result.matched++
       } catch {
         // couldn't copy this one - leave the game without a trainer
@@ -1841,11 +1878,36 @@ async function launchGame(id: string): Promise<void> {
   // Launching via a forked helper keeps the (potentially slow, AV-scanned)
   // CreateProcess call for the game's own .exe off the main process's event
   // loop, so the UI doesn't freeze while Windows starts the game.
-  const helper = fork(join(__dirname, 'launcher-helper.js'), [game.exePath, game.installDir], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-    stdio: 'ignore',
-    silent: true
-  })
+  // Elevated launches go through PowerShell's Start-Process -Verb RunAs, the
+  // only way to raise UAC from here. The cost is playtime: the elevated game
+  // isn't our child, so PowerShell returns immediately and there's nothing to
+  // wait on. The Edit dialog says so next to the checkbox.
+  if (game.runAsAdmin) {
+    const args = game.launchArgs.trim()
+    const psArgs = args ? `-ArgumentList ${JSON.stringify(args)} ` : ''
+    const command =
+      `Start-Process -FilePath ${JSON.stringify(game.exePath)} ` +
+      `-WorkingDirectory ${JSON.stringify(game.installDir)} ${psArgs}-Verb RunAs`
+    try {
+      await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command])
+    } catch {
+      // user declined the UAC prompt, or the exe is gone
+    }
+    game.lastPlayed = new Date().toISOString()
+    await saveLibrary()
+    broadcastLibrary()
+    return
+  }
+
+  const helper = fork(
+    join(__dirname, 'launcher-helper.js'),
+    [game.exePath, game.installDir, ...(game.launchArgs.trim() ? game.launchArgs.trim().split(/\s+/) : [])],
+    {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      stdio: 'ignore',
+      silent: true
+    }
+  )
 
   runningProcesses.set(id, { child: helper, start: Date.now() })
   broadcastRunning(id, true)
@@ -1862,6 +1924,50 @@ async function launchGame(id: string): Promise<void> {
   }
   helper.once('exit', () => void finish())
   helper.once('error', () => void finish())
+}
+
+/**
+ * Games that look like the same title installed in more than one place.
+ *
+ * A *report* rather than an action: automatic merging was rejected because
+ * name matching got 1 of 7 pairs wrong, and both copies are usually real
+ * installs on disk. Reusing the trainer matcher's series-number guard keeps
+ * "Far Cry" and "Far Cry 5" apart, but the user still decides what goes.
+ */
+function findDuplicateGroups(): DuplicateGroup[] {
+  const normalize = (s: string): string => s.replace(/[^a-z0-9]/gi, '').toLowerCase()
+  const buckets = new Map<string, Game[]>()
+  for (const game of games) {
+    const key = normalize(game.name)
+    if (!key) continue
+    buckets.set(key, [...(buckets.get(key) ?? []), game])
+  }
+
+  const groups: DuplicateGroup[] = []
+  for (const copies of buckets.values()) {
+    if (copies.length < 2) continue
+    // Same folder twice isn't a duplicate install, just two entries.
+    const distinctDirs = new Set(copies.map((g) => g.installDir.replace(/[\\/]+$/, '').toLowerCase()))
+    if (distinctDirs.size < 2) continue
+
+    const sizes = copies.map((g) => g.installSizeBytes)
+    const allMeasured = sizes.every((s): s is number => s !== null)
+    groups.push({
+      name: copies[0].name,
+      copies: copies.map((g) => ({
+        id: g.id,
+        name: g.name,
+        installDir: g.installDir,
+        source: g.source,
+        sizeBytes: g.installSizeBytes
+      })),
+      // Keeping one copy: everything but the largest is recoverable.
+      reclaimableBytes: allMeasured
+        ? sizes.reduce((sum, s) => sum + s, 0) - Math.max(...(sizes as number[]))
+        : null
+    })
+  }
+  return groups.sort((a, b) => (b.reclaimableBytes ?? 0) - (a.reclaimableBytes ?? 0))
 }
 
 async function rememberScanRoot(root: string): Promise<void> {
@@ -2136,6 +2242,8 @@ function registerIpcHandlers(): void {
       installSizeBytes: null,
       sizeMeasuredAt: null,
       trainerPath: null,
+      launchArgs: '',
+      runAsAdmin: false,
       steamAppId: null,
       epicAppName: null,
       gogProductId: null,
@@ -2188,6 +2296,8 @@ function registerIpcHandlers(): void {
         installSizeBytes: null,
         sizeMeasuredAt: null,
         trainerPath: null,
+        launchArgs: '',
+        runAsAdmin: false,
         steamAppId: null,
         epicAppName: null,
         gogProductId: null,
@@ -2266,7 +2376,15 @@ function registerIpcHandlers(): void {
       patch: Partial<
         Pick<
           Game,
-          'name' | 'favorite' | 'tags' | 'rating' | 'categoryIds' | 'steamAppId' | 'excludeFromPlaytime'
+          | 'name'
+          | 'favorite'
+          | 'tags'
+          | 'rating'
+          | 'categoryIds'
+          | 'steamAppId'
+          | 'excludeFromPlaytime'
+          | 'launchArgs'
+          | 'runAsAdmin'
         >
       >
     ) => {
@@ -2543,7 +2661,61 @@ function registerIpcHandlers(): void {
     return settings.trainerFolder
   })
 
+  ipcMain.handle('trainers:pickMirrorFolder', async (): Promise<string | null> => {
+    const result = await showOpenDialog({
+      properties: ['openDirectory'],
+      title: 'Select a folder to also keep matched trainers in'
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    settings = { ...settings, trainerMirrorFolder: result.filePaths[0] }
+    await saveSettingsToDisk()
+    return settings.trainerMirrorFolder
+  })
+
   ipcMain.handle('trainers:scan', async (): Promise<TrainerScanResult> => scanTrainers())
+
+  ipcMain.handle('trainers:list', async (): Promise<TrainerFileInfo[]> => {
+    const assigned = new Set(
+      games.map((g) => g.trainerPath?.toLowerCase()).filter((p): p is string => typeof p === 'string')
+    )
+    const sources = [trainersDir, settings.trainerFolder].filter(Boolean)
+    const seen = new Set<string>()
+    const out: TrainerFileInfo[] = []
+    for (const source of sources) {
+      for (const t of await scanTrainerFolder(source)) {
+        const key = t.fileName.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push({ fileName: t.fileName, path: t.path, assigned: assigned.has(t.path.toLowerCase()) })
+      }
+    }
+    return out.sort((a, b) => a.fileName.localeCompare(b.fileName))
+  })
+
+  // Manual override for the 38-odd files whose names don't line up with any
+  // game, and for the cases where automatic matching picks the wrong one.
+  ipcMain.handle(
+    'trainers:assign',
+    async (_e, gameId: string, sourcePath: string | null): Promise<Game | null> => {
+      const game = games.find((g) => g.id === gameId)
+      if (!game) return null
+      if (sourcePath === null) {
+        game.trainerPath = null
+      } else {
+        await fs.mkdir(trainersDir, { recursive: true })
+        const fileName = basename(sourcePath)
+        const dest = join(trainersDir, fileName)
+        if (sourcePath.toLowerCase() !== dest.toLowerCase()) await copyFileAtomic(sourcePath, dest)
+        await mirrorTrainerFile(dest, fileName)
+        game.trainerPath = dest
+      }
+      await saveLibrary()
+      broadcastLibrary()
+      return game
+    }
+  )
+
+  ipcMain.handle('games:duplicates', async (): Promise<DuplicateGroup[]> => findDuplicateGroups())
 
   ipcMain.handle('trainers:launch', async (_e, id: string): Promise<{ ok: boolean; error?: string }> => {
     const game = games.find((g) => g.id === id)

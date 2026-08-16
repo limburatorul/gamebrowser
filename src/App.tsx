@@ -3,6 +3,7 @@ import type {
   BackupPrefs,
   Category,
   FolderScanResult,
+  TrainerFileInfo,
   Game,
   GameCandidate,
   LibrarySyncEvent,
@@ -70,6 +71,7 @@ export default function App(): JSX.Element {
     backupKeepCount: 5,
     scanRoots: [],
     trainerFolder: '',
+    trainerMirrorFolder: '',
     watchDownloadsForTrainers: true,
     lastBackupAt: null,
     librarySyncEnabled: true
@@ -101,6 +103,7 @@ export default function App(): JSX.Element {
   const [sweepingMetadata, setSweepingMetadata] = useState(false)
   const [measuringSizes, setMeasuringSizes] = useState(false)
   const [scanningTrainers, setScanningTrainers] = useState(false)
+  const [trainerFiles, setTrainerFiles] = useState<TrainerFileInfo[]>([])
   const [diskSizeProgress, setDiskSizeProgress] = useState<ScanProgress | null>(null)
   // Column count comes back from the grid, which is the only place that knows
   // how many tiles fit. Needed so Up/Down move by a whole row.
@@ -356,6 +359,13 @@ export default function App(): JSX.Element {
   }, [visibleGames])
 
   const handleColumnsChange = useCallback((n: number) => setColumns(n), [])
+
+  // Only loaded while the Edit dialog is open - walking the trainer folders on
+  // every render would be wasteful, and the list only matters in there.
+  useEffect(() => {
+    if (editingId === null) return
+    void window.api.listTrainerFiles().then(setTrainerFiles)
+  }, [editingId])
 
   const selectedGame = useMemo(() => {
     if (selectedIds.size !== 1) return null
@@ -874,10 +884,13 @@ export default function App(): JSX.Element {
 
   async function handlePickTrainerFolder(): Promise<string | null> {
     const picked = await window.api.pickTrainerFolder()
-    if (picked) {
-      const s = await window.api.getSettings()
-      setSettings(s)
-    }
+    if (picked) setSettings(await window.api.getSettings())
+    return picked
+  }
+
+  async function handlePickTrainerMirrorFolder(): Promise<string | null> {
+    const picked = await window.api.pickTrainerMirrorFolder()
+    if (picked) setSettings(await window.api.getSettings())
     return picked
   }
 
@@ -918,6 +931,8 @@ export default function App(): JSX.Element {
     rating: number | null
     categoryIds: string[]
     steamAppId: number | null
+    launchArgs: string
+    runAsAdmin: boolean
   }): Promise<void> {
     if (!editingId) return
     setSavingEdit(true)
@@ -927,6 +942,11 @@ export default function App(): JSX.Element {
     } finally {
       setSavingEdit(false)
     }
+  }
+
+  async function handleAssignTrainer(sourcePath: string | null): Promise<void> {
+    if (!editingId) return
+    await window.api.assignTrainer(editingId, sourcePath)
   }
 
   function handleChangeExePath(): void {
@@ -1243,6 +1263,7 @@ export default function App(): JSX.Element {
           measuringSizes={measuringSizes}
           diskSizeProgress={diskSizeProgress}
           onPickTrainerFolder={handlePickTrainerFolder}
+          onPickTrainerMirrorFolder={handlePickTrainerMirrorFolder}
           onScanTrainers={handleScanTrainers}
           scanningTrainers={scanningTrainers}
         />
@@ -1289,6 +1310,8 @@ export default function App(): JSX.Element {
           saving={savingEdit}
           onCancel={() => setEditingId(null)}
           onSave={handleSaveEdit}
+          trainerFiles={trainerFiles}
+          onAssignTrainer={handleAssignTrainer}
           onChangeExePath={handleChangeExePath}
           onBrowseCover={handleBrowseCoverInEdit}
           onSearchCover={handleSearchCoverInEdit}
