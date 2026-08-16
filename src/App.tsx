@@ -112,6 +112,8 @@ export default function App(): JSX.Element {
   // listener isn't torn down and re-attached on every keystroke in the search
   // box, which is what happens if the list itself is a dependency.
   const visibleGamesRef = useRef<Game[]>([])
+  // Lets a keystroke anywhere in the window hand focus to the search box.
+  const searchRef = useRef<HTMLInputElement>(null)
   const [updateDownloading, setUpdateDownloading] = useState(false)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [whatsNew, setWhatsNew] = useState<{ title: string; entries: ChangelogEntry[] } | null>(null)
@@ -235,6 +237,31 @@ export default function App(): JSX.Element {
       // rename input, anything in a dialog.
       const el = document.activeElement
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return
+
+      // Start typing anywhere and it goes to the search box. Only a bare
+      // printable character counts: any modifier means a shortcut (Ctrl+F,
+      // Alt+Tab), and e.key is a whole word ('ArrowLeft', 'F5', 'Dead' for an
+      // IME dead key) for everything that isn't one. Space is left out - it
+      // can't usefully start a query, and once the first character has landed
+      // the box has focus, so the rest of the phrase reaches it directly.
+      //
+      // Deliberately ahead of the empty-list check below: a search matching
+      // nothing must still accept more typing.
+      if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1 && e.key !== ' ' && searchRef.current) {
+        e.preventDefault()
+        const input = searchRef.current
+        // Functional update because `search` isn't a dependency of this
+        // effect, so the value captured in this closure would be stale.
+        setSearch((current) => current + e.key)
+        input.focus()
+        // After React has re-rendered with the new value, or the caret can be
+        // left wherever it was and the next characters land mid-word.
+        requestAnimationFrame(() => {
+          const end = input.value.length
+          input.setSelectionRange(end, end)
+        })
+        return
+      }
 
       const list = visibleGamesRef.current
       if (list.length === 0) return
@@ -1089,6 +1116,7 @@ export default function App(): JSX.Element {
       <TopBar
         search={search}
         onSearchChange={setSearch}
+        searchRef={searchRef}
         sortKey={sortKey}
         onSortChange={setSortKey}
         viewMode={viewMode}

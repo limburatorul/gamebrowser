@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.31.0',
+    changes: [
+      'New: just start typing anywhere in the window and it goes into the search box — no need to click it first. Arrow keys still move through the library, and shortcuts like Ctrl+A are untouched.'
+    ]
+  },
+  {
     version: '1.30.1',
     changes: [
       'Fixed: the size and trainer markings on a cover, and the play button on hover, could be hidden behind the cover art itself — most reliably after resizing the window. Introduced by the cover work in 1.30.0.'
