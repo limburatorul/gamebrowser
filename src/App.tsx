@@ -1122,6 +1122,10 @@ export default function App(): JSX.Element {
   return (
     <div
       className={`app ${selectedGame || selectedIds.size > 1 ? 'has-details' : ''}`}
+      // Drives the shared glass recipe in index.css. On the app root rather
+      // than <html> so the dialogs, which render inside this tree, pick it up
+      // along with the colour variables below.
+      data-glass={uiPrefs.glassStyle}
       style={
         {
           '--topbar-alpha': String(uiPrefs.topBarOpacity),

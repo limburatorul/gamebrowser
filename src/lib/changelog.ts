@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.0.0',
+    changes: [
+      'New: pick how every translucent surface is treated, in Settings under Appearance. "Glass" is the plain blur you have had until now and stays the default.',
+      '"Acrylic" pulls colour up from whatever is behind it and lays a fine grain over the top, the way Windows does it. "Frosted" blurs harder and goes milkier, with almost no colour bleeding through — easier on text when there is bright cover art underneath.',
+      'Your existing blur sliders still apply. The style decides how far each one is pushed, so a bar left at 16px reads as 16 on Glass, 34 on Acrylic and 48 on Frosted.'
+    ]
+  },
+  {
     version: '1.38.0',
     changes: [
       'New: "What to Play" in the sidebar suggests something from the games you have never played, chosen by the genres you actually spend time on — and it tells you which ones, so the pick never looks arbitrary.',
