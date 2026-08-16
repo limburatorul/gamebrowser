@@ -1184,10 +1184,17 @@ interface SteamManifest {
   installdir: string
 }
 
-async function parseAppManifests(libraryPath: string): Promise<SteamManifest[]> {
+/**
+ * Returns null - not an empty list - when the library folder can't be read.
+ * The difference decides whether games there get removed from the library:
+ * "this folder holds no installed games" and "this folder wasn't there when I
+ * looked" produce the same empty manifest list but mean opposite things, and
+ * one of this user's Steam libraries is a network share.
+ */
+async function parseAppManifests(libraryPath: string): Promise<SteamManifest[] | null> {
   const steamappsDir = join(libraryPath, 'steamapps')
   const entries = await safeReaddir(steamappsDir)
-  if (!entries) return []
+  if (!entries) return null
   const manifests: SteamManifest[] = []
   for (const entry of entries) {
     if (!entry.isFile() || !/^appmanifest_\d+\.acf$/i.test(entry.name)) continue
@@ -1260,10 +1267,18 @@ interface InstalledSteamGame {
 // install paths all failed) so callers can tell "not installed" apart from
 // "installed with zero games" - the two need different handling for sync
 // (skip removal vs. legitimately remove everything).
-async function findInstalledSteamGames(): Promise<InstalledSteamGame[] | null> {
+interface SteamScan {
+  games: InstalledSteamGame[]
+  /** Library folders that could actually be read this run. A game installed
+      under a folder absent from this list is never treated as uninstalled. */
+  readableLibraries: string[]
+}
+
+async function findInstalledSteamGames(): Promise<SteamScan | null> {
   const steamPath = await findSteamPath()
   if (!steamPath) return null
   const libraries = await findSteamLibraryFolders(steamPath)
+  const readableLibraries: string[] = []
   const result: InstalledSteamGame[] = []
   // Several appids can share one installdir - Half-Life 2, Lost Coast and both
   // episodes all live in "common\Half-Life 2", which produced four library
@@ -1273,6 +1288,8 @@ async function findInstalledSteamGames(): Promise<InstalledSteamGame[] | null> {
   const seenAppIds = new Set<number>()
   for (const lib of libraries) {
     const manifests = await parseAppManifests(lib)
+    if (manifests === null) continue
+    readableLibraries.push(lib)
     for (const m of manifests) {
       const appId = Number(m.appid)
       const installDir = join(lib, 'steamapps', 'common', m.installdir)
@@ -1283,7 +1300,7 @@ async function findInstalledSteamGames(): Promise<InstalledSteamGame[] | null> {
       result.push({ appId, name: m.name, installDir })
     }
   }
-  return result
+  return { games: result, readableLibraries }
 }
 
 async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]> {
@@ -1523,12 +1540,34 @@ async function syncUbisoftLibrary(): Promise<{ added: Game[]; removed: Game[] }>
   return { added, removed }
 }
 
+/** True when `child` sits inside `parent`, comparing Windows-style. */
+function isInsideFolder(child: string, parent: string): boolean {
+  const norm = (p: string): string => p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+  const c = norm(child)
+  const p = norm(parent)
+  return c === p || c.startsWith(p + '\\')
+}
+
 async function syncSteamLibrary(): Promise<{ added: Game[]; removed: Game[] }> {
-  const installed = await findInstalledSteamGames()
-  if (installed === null) return { added: [], removed: [] }
-  const installedIds = new Set(installed.map((g) => g.appId))
-  const removed = games.filter((g) => g.source === 'steam' && g.steamAppId !== null && !installedIds.has(g.steamAppId))
-  const added = await addNewSteamGames(installed)
+  const scan = await findInstalledSteamGames()
+  if (scan === null) return { added: [], removed: [] }
+  const installedIds = new Set(scan.games.map((g) => g.appId))
+
+  const removed = games.filter((g) => {
+    if (g.source !== 'steam') return false
+    if (g.steamAppId !== null && installedIds.has(g.steamAppId)) return false
+    // Only drop a game when its own Steam library folder was readable this
+    // run. 24 of this library's 34 Steam manifests live on a network share,
+    // and if that share isn't mounted every one of them looks uninstalled -
+    // which would delete the entries along with their covers and icons.
+    // Anything we couldn't positively check stays put; a stale entry is
+    // cheap, and the Dashboard's missing-files check catches it anyway.
+    // Note this deliberately does not require a steamAppId: an entry that
+    // lost its appid could previously never be removed at all.
+    return scan.readableLibraries.some((lib) => isInsideFolder(g.installDir, lib))
+  })
+
+  const added = await addNewSteamGames(scan.games)
   return { added, removed }
 }
 
@@ -1558,13 +1597,32 @@ async function syncGogLibrary(): Promise<{ added: Game[]; removed: Game[] }> {
   return { added, removed }
 }
 
-// Runs once at startup (see whenReady): checks Steam/Epic/GOG for games that
+// Runs at startup AND on an interval (see whenReady). Startup-only meant that
+// with the app left open, uninstalling a game in Steam was never noticed - 16
+// entries sat here for over a day with their manifests long gone, the same
+// one-shot-task mistake the screenshot and cover sweeps were both fixed for.
+// Checks Steam/Epic/GOG for games that
 // were installed or uninstalled since the last launch and mirrors that into
 // the library, without requiring the user to press the manual Import
 // buttons. Silent either way - same "just updates in the background" pattern
 // as repairIgnoredExePaths, not a popup/toast.
+const LIBRARY_SYNC_INTERVAL_MS = 15 * 60 * 1000
+let librarySyncRunning = false
+
 async function syncPlatformLibraries(): Promise<void> {
   if (!settings.librarySyncEnabled) return
+  // A slow network library can make a run outlast the interval; overlapping
+  // runs would compute `removed` from the same stale snapshot twice.
+  if (librarySyncRunning) return
+  librarySyncRunning = true
+  try {
+    await runPlatformSync()
+  } finally {
+    librarySyncRunning = false
+  }
+}
+
+async function runPlatformSync(): Promise<void> {
   const [steam, epic, gog, ubisoft] = await Promise.all([
     syncSteamLibrary().catch((): { added: Game[]; removed: Game[] } => ({ added: [], removed: [] })),
     syncEpicLibrary().catch((): { added: Game[]; removed: Game[] } => ({ added: [], removed: [] })),
@@ -2486,7 +2544,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('steam:import', async (): Promise<ImportResult> => {
     const installed = await findInstalledSteamGames()
     if (installed === null) return { imported: 0, error: 'Steam installation not found.' }
-    const created = await addNewSteamGames(installed)
+    const created = await addNewSteamGames(installed.games)
     if (created.length > 0) {
       await saveLibrary()
       broadcastLibrary()
@@ -3211,6 +3269,12 @@ if (gotSingleInstanceLock) {
     // Also cheap to re-run - it exits immediately once nothing is missing,
     // and skips games already found to have no match this session.
     setInterval(() => void sweepMissingMetadata(), METADATA_SWEEP_INTERVAL_MS)
+
+    // Games get installed and uninstalled while this app sits open for days,
+    // and nothing re-checked that after the startup pass. Cheap to repeat:
+    // it exits immediately when the preference is off, and a pass that finds
+    // no change saves nothing and broadcasts nothing.
+    setInterval(() => void syncPlatformLibraries(), LIBRARY_SYNC_INTERVAL_MS)
 
     // Deliberately NOT chained behind the cover and screenshot sweeps. Those
     // are network-bound and can run for many minutes on a large library, and

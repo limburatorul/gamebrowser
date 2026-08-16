@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.29.1',
+    changes: [
+      'Fixed: games uninstalled from Steam, Epic, GOG or Ubisoft were only noticed when the app started. If you left it open — which is the normal way to use it — the list went stale; sixteen games sat in the library for over a day after being uninstalled. It now re-checks every fifteen minutes.',
+      'Fixed: a game is no longer removed when the drive its platform library sits on cannot be read. Previously a Steam library on a network drive that was not connected made every game on it look uninstalled, which would have cleared them out of the library along with their covers.',
+      'Fixed: a Steam game whose store ID had gone missing could never be cleaned up automatically.'
+    ]
+  },
+  {
     version: '1.29.0',
     changes: [
       'New: the Dashboard breaks storage down per drive — how many games sit on each one, how much room they take, how much of that is games you have never played, and how much space is left on the drive itself.',
