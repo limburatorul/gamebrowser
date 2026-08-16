@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.35.0',
+    changes: [
+      'New: games can be hidden. Right-click one, or use the ⋯ menu in the bar at the bottom; with several selected there is a "Hide Selected" button.',
+      'A hidden game keeps its playtime, rating and categories, but it is left out of the grid, the counts in the sidebar, the most-played list, and the rotating backdrop.',
+      'New: a "Hidden" tab in Settings lists everything you have hidden, with an Unhide button for each and one to bring them all back.',
+      'The Dashboard deliberately still counts hidden games — hiding one does not free up the space it takes on disk.'
+    ]
+  },
+  {
     version: '1.34.0',
     changes: [
       'The sliders and tick boxes are no longer the plain Windows ones — Settings alone showed ten of them — so the whole window now looks like one program.',

@@ -20,6 +20,7 @@ interface Props {
   onRemove: (id: string) => void
   onUninstall: (id: string) => void
   onDeleteFromDisk: (id: string) => void
+  onToggleHidden: (id: string) => void
 }
 
 const PLATFORM_SOURCES = new Set(['steam', 'epic', 'gog', 'ubisoft'])
@@ -39,7 +40,8 @@ export default function GameDetails({
   onSetCover,
   onRemove,
   onUninstall,
-  onDeleteFromDisk
+  onDeleteFromDisk,
+  onToggleHidden
 }: Props): JSX.Element {
   const [moreOpen, setMoreOpen] = useState(false)
   const run = (fn: (id: string) => void): void => {
@@ -125,6 +127,15 @@ export default function GameDetails({
             <>
               <div className="import-menu-overlay" onClick={() => setMoreOpen(false)} />
               <div className="import-menu details-more-menu">
+                <button
+                  className="import-menu-item"
+                  title="Keep it in the library but out of the grid, the sidebar counts and the backdrop"
+                  onClick={() => run(onToggleHidden)}
+                >
+                  <span className="import-menu-icon">👁</span>
+                  <span>{game.hidden ? 'Unhide' : 'Hide from library'}</span>
+                </button>
+                <div className="import-menu-separator" />
                 {PLATFORM_SOURCES.has(game.source) ? (
                   <button className="import-menu-item" onClick={() => run(onUninstall)}>
                     <span className="import-menu-icon">⊘</span>

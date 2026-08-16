@@ -312,10 +312,20 @@ export default function App(): JSX.Element {
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [games])
 
+  // Everything you browse works from this rather than `games`: the grid, the
+  // sidebar counts and its most-played list, and the backdrop. The Dashboard
+  // is deliberately the exception and still sees the whole library - it
+  // reports on what is on disk, and hiding a game doesn't free its space.
+  const browsableGames = useMemo(() => games.filter((g) => !g.hidden), [games])
+  const hiddenGames = useMemo(() => games.filter((g) => g.hidden), [games])
+
   // Games flagged "ignore playtime" keep their recorded seconds but are left
   // out of every aggregate - the library total here, the most-played list
   // below, and the dashboard's totals and breakdowns.
-  const countedForPlaytime = useMemo(() => games.filter((g) => !g.excludeFromPlaytime), [games])
+  const countedForPlaytime = useMemo(
+    () => browsableGames.filter((g) => !g.excludeFromPlaytime),
+    [browsableGames]
+  )
 
   const totalPlaytimeSeconds = useMemo(
     () => countedForPlaytime.reduce((sum, g) => sum + g.playtimeSeconds, 0),
@@ -323,8 +333,8 @@ export default function App(): JSX.Element {
   )
 
   const backdropCoverPaths = useMemo(
-    () => games.map((g) => g.coverPath).filter((p): p is string => Boolean(p)),
-    [games]
+    () => browsableGames.map((g) => g.coverPath).filter((p): p is string => Boolean(p)),
+    [browsableGames]
   )
 
   const playtimeEntries = useMemo(
@@ -337,7 +347,7 @@ export default function App(): JSX.Element {
   )
 
   const visibleGames = useMemo(() => {
-    let list = games
+    let list = browsableGames
     if (filter === 'favorites') list = list.filter((g) => g.favorite)
     if (filter === 'recent') list = list.filter((g) => g.lastPlayed)
     if (filter === 'never-played') list = list.filter((g) => g.playtimeSeconds === 0)
@@ -379,7 +389,7 @@ export default function App(): JSX.Element {
       }
     })
     return sorted
-  }, [games, filter, genreFilter, tagFilter, search, sortKey])
+  }, [browsableGames, filter, genreFilter, tagFilter, search, sortKey])
 
   useEffect(() => {
     visibleGamesRef.current = visibleGames
@@ -927,6 +937,26 @@ export default function App(): JSX.Element {
     void window.api.update(id, { excludeFromPlaytime: !game.excludeFromPlaytime })
   }
 
+  function handleToggleHidden(id: string): void {
+    const game = games.find((g) => g.id === id)
+    if (!game) return
+    void window.api.update(id, { hidden: !game.hidden })
+    // A hidden game disappears from the grid, so leaving it selected would
+    // leave the details bar showing something that is no longer on screen.
+    if (!game.hidden) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
+  }
+
+  async function handleBulkHide(): Promise<void> {
+    await Promise.all([...selectedIds].map((id) => window.api.update(id, { hidden: true })))
+    setSelectedIds(new Set())
+  }
+
   function handleRateGame(id: string, rating: number | null): void {
     void window.api.update(id, { rating })
   }
@@ -1147,18 +1177,18 @@ export default function App(): JSX.Element {
         <Sidebar
           filter={filter}
           onFilterChange={setFilter}
-          totalCount={games.length}
-          favoriteCount={games.filter((g) => g.favorite).length}
-          neverPlayedCount={games.filter((g) => g.playtimeSeconds === 0).length}
-          hasTrainerCount={games.filter((g) => g.trainerPath).length}
-          noCoverCount={games.filter((g) => !g.coverPath).length}
-          steamCount={games.filter((g) => g.source === 'steam').length}
-          epicCount={games.filter((g) => g.source === 'epic').length}
-          gogCount={games.filter((g) => g.source === 'gog').length}
-          ubisoftCount={games.filter((g) => g.source === 'ubisoft').length}
+          totalCount={browsableGames.length}
+          favoriteCount={browsableGames.filter((g) => g.favorite).length}
+          neverPlayedCount={browsableGames.filter((g) => g.playtimeSeconds === 0).length}
+          hasTrainerCount={browsableGames.filter((g) => g.trainerPath).length}
+          noCoverCount={browsableGames.filter((g) => !g.coverPath).length}
+          steamCount={browsableGames.filter((g) => g.source === 'steam').length}
+          epicCount={browsableGames.filter((g) => g.source === 'epic').length}
+          gogCount={browsableGames.filter((g) => g.source === 'gog').length}
+          ubisoftCount={browsableGames.filter((g) => g.source === 'ubisoft').length}
           categories={categories}
           categoryCounts={Object.fromEntries(
-            categories.map((c) => [c.id, games.filter((g) => g.categoryIds.includes(c.id)).length])
+            categories.map((c) => [c.id, browsableGames.filter((g) => g.categoryIds.includes(c.id)).length])
           )}
           totalPlaytimeSeconds={totalPlaytimeSeconds}
           playtimeEntries={playtimeEntries}
@@ -1212,6 +1242,7 @@ export default function App(): JSX.Element {
           onRemove={handleRemove}
           onUninstall={setConfirmUninstallId}
           onDeleteFromDisk={setConfirmDeleteDiskId}
+          onToggleHidden={handleToggleHidden}
         />
       )}
 
@@ -1228,6 +1259,7 @@ export default function App(): JSX.Element {
               onDelete={() => setConfirmBulkDelete(true)}
               onAddToCategory={handleBulkAddToCategory}
               onRate={handleBulkRate}
+              onHide={() => void handleBulkHide()}
               onUninstall={() => setConfirmBulkUninstall(true)}
               onDeleteFromDisk={() => setConfirmBulkDeleteDisk(true)}
             />
@@ -1248,6 +1280,7 @@ export default function App(): JSX.Element {
               onLaunch={handleLaunch}
               onToggleFavorite={handleToggleFavorite}
               onTogglePlaytimeIgnored={handleTogglePlaytimeIgnored}
+              onToggleHidden={handleToggleHidden}
               onEdit={handleEdit}
               onSetCover={handleSetCover}
               onRemove={handleRemove}
@@ -1294,6 +1327,11 @@ export default function App(): JSX.Element {
           onPickTrainerMirrorFolder={handlePickTrainerMirrorFolder}
           onScanTrainers={handleScanTrainers}
           scanningTrainers={scanningTrainers}
+          hiddenGames={hiddenGames}
+          onUnhide={(id) => void window.api.update(id, { hidden: false })}
+          onUnhideAll={() => {
+            for (const g of hiddenGames) void window.api.update(g.id, { hidden: false })
+          }}
         />
       )}
       {aboutOpen && (
