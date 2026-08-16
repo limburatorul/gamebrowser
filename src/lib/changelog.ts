@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.32.0',
+    changes: [
+      'New: list view has column headings — Name, Genres, Size, Last played, Playtime — and they stay put at the top while you scroll.'
+    ]
+  },
+  {
     version: '1.31.0',
     changes: [
       'New: just start typing anywhere in the window and it goes into the search box — no need to click it first. Arrow keys still move through the library, and shortcuts like Ctrl+A are untouched.'
