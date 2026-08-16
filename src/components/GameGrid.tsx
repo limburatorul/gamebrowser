@@ -32,6 +32,11 @@ const LIST_ROW_HEIGHT = 64
 // of which rows are on screen (and where scrollToIndex lands) is off by this
 // much.
 const LIST_HEADER_HEIGHT = 34
+// .game-scroll's padding-top, which exists so content passes under the
+// translucent topbar. The virtualiser measures from the top of the scroll
+// box, so it has to be told about it or scrollToIndex parks the selected row
+// behind the topbar. Must match index.css.
+const TOP_INSET = 68
 
 export default function GameGrid({
   games,
@@ -65,7 +70,7 @@ export default function GameGrid({
   const rowHeight =
     viewMode === 'grid' ? Math.round(tileWidth * 1.4) + TILE_TITLE_AREA + GRID_GAP : LIST_ROW_HEIGHT
 
-  const scrollMargin = viewMode === 'list' ? LIST_HEADER_HEIGHT : 0
+  const scrollMargin = TOP_INSET + (viewMode === 'list' ? LIST_HEADER_HEIGHT : 0)
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,

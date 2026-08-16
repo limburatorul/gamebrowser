@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.36.0',
+    changes: [
+      'The library now scrolls underneath the top bar and the bar at the bottom, so the cover art moves behind their glass instead of stopping short of it. The scrollbar still stays between the two, where you can reach it.',
+      'Settings is half again as wide and picks up the same glass as the rest of the window, so the labels no longer crowd their sliders.',
+      'The sidebar and the details panel are unchanged.'
+    ]
+  },
+  {
     version: '1.35.0',
     changes: [
       'New: games can be hidden. Right-click one, or use the ⋯ menu in the bar at the bottom; with several selected there is a "Hide Selected" button.',
