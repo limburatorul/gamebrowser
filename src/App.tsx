@@ -98,6 +98,7 @@ export default function App(): JSX.Element {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [dashboardOpen, setDashboardOpen] = useState(false)
   const [whatToPlayOpen, setWhatToPlayOpen] = useState(false)
+  const [ignoredFolders, setIgnoredFolders] = useState<string[]>([])
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
@@ -135,6 +136,7 @@ export default function App(): JSX.Element {
     window.api.getAll().then(setGames)
     window.api.getSettings().then(setSettings)
     window.api.getCategories().then(setCategories)
+    window.api.getIgnoredFolders().then(setIgnoredFolders)
     const offCategories = window.api.onCategoriesChanged(setCategories)
     const offLibrary = window.api.onLibraryChanged(setGames)
     const offLibrarySynced = window.api.onLibrarySynced((events: LibrarySyncEvent[]) => {
@@ -763,10 +765,13 @@ export default function App(): JSX.Element {
     }
   }
 
-  async function handleConfirmImport(selected: GameCandidate[]): Promise<void> {
+  async function handleConfirmImport(selected: GameCandidate[], ignored: string[]): Promise<void> {
     setBusy(true)
     try {
-      const created = await window.api.importCandidates(selected)
+      // Recorded first: if importing then fails, the folders the user marked
+      // to ignore are still remembered rather than silently lost.
+      if (ignored.length > 0) setIgnoredFolders(await window.api.ignoreFolders(ignored))
+      const created = selected.length > 0 ? await window.api.importCandidates(selected) : []
       if (created.length > 0) {
         setSelectedIds(new Set([created[0].id]))
         setAnchorId(created[0].id)
@@ -1085,8 +1090,21 @@ export default function App(): JSX.Element {
     try {
       const result = await window.api.deleteFromDisk(id)
       if (!result.ok) {
-        setInfoMessage({ title: 'Delete from Disk', message: result.error ?? 'Could not delete the game files.' })
+        // The steps say what it tried, which is far more useful than the raw
+        // EBUSY that ends up in `error`.
+        setInfoMessage({
+          title: 'Delete from Disk',
+          message: [result.error ?? 'Could not delete the game files.', '', ...result.steps].join('\n')
+        })
       } else {
+        // Only worth a dialog when it had to do something drastic - stopping
+        // a running game or taking ownership should never happen silently.
+        if (result.killedProcesses.length > 0 || result.tookOwnership) {
+          setInfoMessage({
+            title: 'Deleted, but it needed a hand',
+            message: result.steps.join('\n')
+          })
+        }
         setSelectedIds((prev) => {
           const next = new Set(prev)
           next.delete(id)
@@ -1125,6 +1143,8 @@ export default function App(): JSX.Element {
       for (const g of targets) {
         const result = await window.api.deleteFromDisk(g.id)
         if (!result.ok) errors.push(`${g.name}: ${result.error ?? 'failed'}`)
+        else if (result.killedProcesses.length > 0)
+          errors.push(`${g.name}: deleted after stopping ${result.killedProcesses.join(', ')}`)
       }
       if (errors.length > 0) setInfoMessage({ title: 'Delete from Disk', message: errors.join('\n') })
       setSelectedIds(new Set())
@@ -1367,6 +1387,8 @@ export default function App(): JSX.Element {
           // Deliberately leaves Settings open: closing it would discard any
           // unsaved keys or backup settings on the other tabs.
           onLaunchHidden={handleLaunch}
+          ignoredFolders={ignoredFolders}
+          onUnignoreFolder={(path) => void window.api.unignoreFolder(path).then(setIgnoredFolders)}
         />
       )}
       {aboutOpen && (

@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.3.0',
+    changes: [
+      'Delete from Disk no longer gives up on a folder it cannot remove. It retries, and if that fails it looks for anything running from inside that folder and stops it — only processes from within the folder being deleted, nothing else. If there is still something in the way it offers to take ownership of the folder, which Windows will ask you to confirm.',
+      'It now tells you what it had to do. Stopping a running game or taking ownership is never done silently, and a failure explains which step it got stuck on instead of showing a bare error code.',
+      'New: after scanning a folder you can mark entries "Ignore", and they will be left out of every future scan without being added to your library. The list is remembered between runs and can be undone in Settings under Automation.'
+    ]
+  },
+  {
     version: '2.2.0',
     changes: [
       'New: the playtime list in the sidebar, and the total under it, can be narrowed to time this app measured itself rather than everything Steam also counted. The choice sits under the Playtime heading.',

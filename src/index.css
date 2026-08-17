@@ -2653,6 +2653,31 @@ input[type='checkbox']:focus-visible {
   white-space: nowrap;
 }
 
+/* Long paths, truncated from the left like everywhere else in the app - the
+   tail is what identifies the folder. */
+.ignored-path {
+  direction: rtl;
+  unicode-bidi: isolate;
+  font-size: 11.5px;
+}
+
+.candidate-row.is-ignored {
+  opacity: 0.5;
+}
+
+.candidate-ignore {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 4px 10px;
+}
+
+.candidate-ignore.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--text-0);
+  opacity: 1;
+}
+
 .hidden-unhide,
 .hidden-play {
   flex-shrink: 0;

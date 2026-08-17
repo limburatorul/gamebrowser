@@ -72,7 +72,25 @@ export interface FolderScanResult {
   scanned: number
   /** Subfolders skipped because they're already in the library. */
   skipped: number
+  /** Subfolders skipped because they're on the ignore list. */
+  ignored: number
   roots: string[]
+}
+
+/**
+ * How a delete-from-disk went, including what it had to escalate to. A plain
+ * ok/error hides the fact that it killed a running game or asked for
+ * elevation, both of which the user should be told about after the fact.
+ */
+export interface DeleteFromDiskResult {
+  ok: boolean
+  error?: string
+  /** Human-readable account of what was attempted, in order. */
+  steps: string[]
+  /** Executables terminated because they were running from inside the folder. */
+  killedProcesses: string[]
+  /** True when it had to take ownership of the tree to get rid of it. */
+  tookOwnership: boolean
 }
 
 export interface ScanProgress {
@@ -339,7 +357,11 @@ export interface GameApi {
   remove(id: string): Promise<void>
   removeMany(ids: string[]): Promise<void>
   uninstall(id: string): Promise<{ ok: boolean; error?: string }>
-  deleteFromDisk(id: string): Promise<{ ok: boolean; error?: string }>
+  deleteFromDisk(id: string): Promise<DeleteFromDiskResult>
+  /** Folders the scan should skip from now on, remembered across runs. */
+  getIgnoredFolders(): Promise<string[]>
+  ignoreFolders(paths: string[]): Promise<string[]>
+  unignoreFolder(path: string): Promise<string[]>
   cleanAllNames(): Promise<{ changed: number }>
   fetchCovers(): Promise<CoverFetchResult>
   fetchCoverForOne(id: string): Promise<{ ok: boolean; found: boolean }>

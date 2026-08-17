@@ -29,7 +29,8 @@ import type {
   DuplicateGroup,
   DriveUsage,
   MissingGameEntry,
-  MissingScanResult
+  MissingScanResult,
+  DeleteFromDiskResult
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -84,6 +85,10 @@ const trainersDir = join(userDataPath, 'trainers')
 const windowStateFile = join(userDataPath, 'window.json')
 const settingsFile = join(userDataPath, 'settings.json')
 const categoriesFile = join(userDataPath, 'categories.json')
+// Folders the user has told the scan to leave alone. Its own file rather than
+// a settings field: it is a list that grows every time a folder is scanned,
+// and settings.json holds things worth not rewriting constantly.
+const ignoredFoldersFile = join(userDataPath, 'ignoredFolders.json')
 
 const UPDATE_REPO = 'limburatorul/gamebrowser'
 
@@ -164,6 +169,25 @@ async function loadCategories(): Promise<void> {
 
 async function saveCategories(): Promise<void> {
   await fs.writeFile(categoriesFile, JSON.stringify(categories, null, 2), 'utf-8')
+}
+
+/** Stored as given so the UI can show a readable path; compared normalised. */
+let ignoredFolders: string[] = []
+
+const folderKey = (p: string): string => p.replace(/\//g, '\\').replace(/[\\]+$/, '').toLowerCase()
+
+async function loadIgnoredFolders(): Promise<void> {
+  try {
+    const raw = await fs.readFile(ignoredFoldersFile, 'utf-8')
+    const parsed = JSON.parse(raw)
+    ignoredFolders = Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : []
+  } catch {
+    ignoredFolders = []
+  }
+}
+
+async function saveIgnoredFolders(): Promise<void> {
+  await fs.writeFile(ignoredFoldersFile, JSON.stringify(ignoredFolders, null, 2), 'utf-8')
 }
 
 function broadcastCategories(): void {
@@ -2071,6 +2095,125 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
+ * Processes running from inside a folder.
+ *
+ * The path goes through the environment rather than the command line, and the
+ * comparison is `StartsWith` rather than PowerShell's `-like`: real game
+ * folders contain characters `-like` treats as wildcards - this library has a
+ * game whose folder is literally `Lu[idle]`, which as a pattern would match
+ * the wrong thing or nothing at all.
+ */
+async function processesUnder(dir: string): Promise<{ pid: number; name: string }[]> {
+  const script =
+    'Get-CimInstance Win32_Process | ' +
+    'Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($env:GB_DIR, [System.StringComparison]::OrdinalIgnoreCase) } | ' +
+    'ForEach-Object { "{0}|{1}" -f $_.ProcessId, $_.Name }'
+  try {
+    const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true,
+      timeout: 20000,
+      env: { ...process.env, GB_DIR: dir.replace(/[\\/]+$/, '') + '\\' }
+    })
+    return stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim().split('|'))
+      .filter((parts) => parts.length === 2 && Number.isFinite(Number(parts[0])))
+      .map(([pid, name]) => ({ pid: Number(pid), name }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Deletes a game folder, escalating only as far as it has to.
+ *
+ * A plain recursive delete covers almost everything - `fs.rm`'s own retries
+ * already handle a transient AV or Explorer handle. What it cannot get past
+ * is the game still running, or an ACL the user no longer has rights over,
+ * and those are exactly the cases that leave a folder undeletable forever.
+ *
+ * Killing is deliberately scoped to processes whose executable lives *inside
+ * the folder being deleted* - the game, its launcher, an anti-cheat shipped
+ * alongside it. Nothing outside that tree is ever touched.
+ *
+ * Taking ownership needs elevation, so Windows puts up its own UAC prompt;
+ * declining it just ends the attempt with the folder intact.
+ */
+async function deleteFolderThoroughly(dir: string): Promise<DeleteFromDiskResult> {
+  const result: DeleteFromDiskResult = { ok: false, steps: [], killedProcesses: [], tookOwnership: false }
+
+  const attempt = async (): Promise<string | null> => {
+    try {
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+      return null
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  let error = await attempt()
+  if (error === null) {
+    result.steps.push('Deleted normally.')
+    return { ...result, ok: true }
+  }
+  result.steps.push(`Normal delete failed: ${error}`)
+
+  const running = await processesUnder(dir)
+  if (running.length === 0) {
+    result.steps.push('Nothing is running from that folder.')
+  } else {
+    result.steps.push(`Found ${running.length} process(es) running from the folder.`)
+    for (const proc of running) {
+      try {
+        process.kill(proc.pid)
+        result.killedProcesses.push(proc.name)
+      } catch {
+        result.steps.push(`Could not stop ${proc.name}.`)
+      }
+    }
+    if (result.killedProcesses.length > 0) {
+      result.steps.push(`Stopped ${result.killedProcesses.join(', ')}.`)
+      // Windows releases the handles a moment after the process actually goes.
+      await new Promise((r) => setTimeout(r, 1500))
+      error = await attempt()
+      if (error === null) {
+        result.steps.push('Deleted after stopping it.')
+        return { ...result, ok: true }
+      }
+      result.steps.push(`Still failing: ${error}`)
+    }
+  }
+
+  // Whatever is left is a permissions problem rather than a lock.
+  result.steps.push('Taking ownership of the folder — Windows will ask for permission.')
+  const quoted = `"${dir.replace(/"/g, '')}"`
+  try {
+    await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Start-Process -FilePath cmd.exe -ArgumentList '/c takeown /f ${quoted} /r /d Y & icacls ${quoted} /grant "%USERNAME%":(OI)(CI)F /t /c' -Verb RunAs -Wait -WindowStyle Hidden`
+      ],
+      { windowsHide: true, timeout: 180000 }
+    )
+    result.tookOwnership = true
+  } catch {
+    result.steps.push('Ownership change was declined or failed.')
+    return { ...result, error: error ?? 'Could not delete the folder.' }
+  }
+
+  error = await attempt()
+  if (error === null) {
+    result.steps.push('Deleted after taking ownership.')
+    return { ...result, ok: true }
+  }
+  result.steps.push(`Still failing after taking ownership: ${error}`)
+  return { ...result, error }
+}
+
+/**
  * The volume a path lives on, as a comparable key: `D:\`, or a UNC share root.
  *
  * Separators are normalised first: Windows accepts either, and the library
@@ -2247,10 +2390,12 @@ async function rememberScanRoot(root: string): Promise<void> {
  * for a folder-scanned game, so anything already claimed is skipped outright.
  */
 async function scanRoots(roots: string[]): Promise<FolderScanResult> {
-  const known = new Set(games.map((g) => g.installDir.replace(/[\\/]+$/, '').toLowerCase()))
+  const known = new Set(games.map((g) => folderKey(g.installDir)))
+  const ignored = new Set(ignoredFolders.map(folderKey))
   const candidates: GameCandidate[] = []
   let scanned = 0
   let skipped = 0
+  let ignoredCount = 0
 
   try {
     // Counted up front so the progress bar reflects the real amount of work
@@ -2261,8 +2406,15 @@ async function scanRoots(roots: string[]): Promise<FolderScanResult> {
       if (!entries) continue
       for (const entry of entries.filter((e) => e.isDirectory())) {
         const full = join(root, entry.name)
-        if (known.has(full.replace(/[\\/]+$/, '').toLowerCase())) {
+        const key = folderKey(full)
+        if (known.has(key)) {
           skipped++
+          continue
+        }
+        // Counted apart from `skipped` so the result can say "and N you told
+        // me to ignore" rather than lumping them in with already-imported.
+        if (ignored.has(key)) {
+          ignoredCount++
           continue
         }
         pending.push({ root, name: entry.name, full })
@@ -2279,9 +2431,9 @@ async function scanRoots(roots: string[]): Promise<FolderScanResult> {
 
     // A root that is itself a single game rather than a folder of games - only
     // worth checking when it has no unclaimed subfolders to explain it.
-    if (candidates.length === 0 && pending.length === 0 && skipped === 0) {
+    if (candidates.length === 0 && pending.length === 0 && skipped === 0 && ignoredCount === 0) {
       for (const root of roots) {
-        if (known.has(root.replace(/[\\/]+$/, '').toLowerCase())) continue
+        if (known.has(folderKey(root)) || ignored.has(folderKey(root))) continue
         broadcastScanProgress({ current: 1, total: 1, currentName: basename(root) })
         const exe = await findBestExe(root)
         scanned++
@@ -2292,7 +2444,7 @@ async function scanRoots(roots: string[]): Promise<FolderScanResult> {
     broadcastScanProgress(null)
   }
 
-  return { candidates, scanned, skipped, roots: settings.scanRoots }
+  return { candidates, scanned, skipped, ignored: ignoredCount, roots: settings.scanRoots }
 }
 
 async function runBackup(): Promise<BackupResult> {
@@ -2331,6 +2483,7 @@ async function restoreFromZip(zipPath: string): Promise<BackupResult> {
     await loadLibrary()
     await loadSettings()
     await loadCategories()
+    await loadIgnoredFolders()
     broadcastLibrary()
     broadcastCategories()
     return { ok: true, path: zipPath, settings }
@@ -2524,7 +2677,7 @@ function registerIpcHandlers(): void {
       title: 'Select a folder containing your games'
     })
     if (result.canceled || result.filePaths.length === 0) {
-      return { candidates: [], scanned: 0, skipped: 0, roots: settings.scanRoots }
+      return { candidates: [], scanned: 0, skipped: 0, ignored: 0, roots: settings.scanRoots }
     }
     const root = result.filePaths[0]
     await rememberScanRoot(root)
@@ -2772,31 +2925,51 @@ function registerIpcHandlers(): void {
   // Only for manually-added/folder-scan games - Steam/Epic/GOG games must go
   // through games:uninstall above instead, so the owning platform stays in
   // sync with what's actually on disk.
-  ipcMain.handle('games:deleteFromDisk', async (_e, id: string): Promise<{ ok: boolean; error?: string }> => {
+  ipcMain.handle('games:deleteFromDisk', async (_e, id: string): Promise<DeleteFromDiskResult> => {
     const idx = games.findIndex((g) => g.id === id)
-    if (idx === -1) return { ok: false, error: 'Game not found.' }
+    const fail = (error: string): DeleteFromDiskResult => ({
+      ok: false,
+      error,
+      steps: [],
+      killedProcesses: [],
+      tookOwnership: false
+    })
+    if (idx === -1) return fail('Game not found.')
     const game = games[idx]
     if (game.source !== 'manual' && game.source !== 'folder-scan') {
-      return { ok: false, error: 'Delete from disk is only available for manually added games.' }
+      return fail('Delete from disk is only available for manually added games.')
     }
-    try {
-      // Windows-specific: a recursive rmdir can transiently fail with
-      // ENOTEMPTY/EBUSY if AV or Explorer still has a brief handle open on
-      // something inside the tree (thumbnail cache, a file that was just
-      // running) even though nothing is actually still using it a moment
-      // later - maxRetries/retryDelay makes Node retry the whole operation
-      // instead of failing on the first attempt.
-      await fs.rm(game.installDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
-    } catch (e) {
-      return { ok: false, error: e instanceof Error ? e.message : String(e) }
-    }
+    // Escalates through stopping the game and taking ownership if a plain
+    // recursive delete can't do it - see deleteFolderThoroughly.
+    const outcome = await deleteFolderThoroughly(game.installDir)
+    if (!outcome.ok) return outcome
     games.splice(idx, 1)
     await saveLibrary()
     broadcastLibrary()
     for (const p of [game.coverPath, game.iconPath]) {
       if (p) fs.unlink(p).catch(() => {})
     }
-    return { ok: true }
+    return outcome
+  })
+
+  ipcMain.handle('folders:getIgnored', async (): Promise<string[]> => ignoredFolders)
+
+  ipcMain.handle('folders:ignore', async (_e, paths: string[]): Promise<string[]> => {
+    const have = new Set(ignoredFolders.map(folderKey))
+    for (const p of paths) {
+      if (!have.has(folderKey(p))) {
+        ignoredFolders.push(p)
+        have.add(folderKey(p))
+      }
+    }
+    await saveIgnoredFolders()
+    return ignoredFolders
+  })
+
+  ipcMain.handle('folders:unignore', async (_e, path: string): Promise<string[]> => {
+    ignoredFolders = ignoredFolders.filter((p) => folderKey(p) !== folderKey(path))
+    await saveIgnoredFolders()
+    return ignoredFolders
   })
 
   ipcMain.handle('games:cleanAllNames', async (): Promise<{ changed: number }> => {
@@ -3254,6 +3427,7 @@ if (gotSingleInstanceLock) {
     await loadLibrary()
     await loadSettings()
     await loadCategories()
+    await loadIgnoredFolders()
 
     protocol.handle('local-file', async (request) => {
       const { pathname } = new URL(request.url)
