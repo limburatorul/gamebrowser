@@ -6,6 +6,12 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.0.1',
+    changes: [
+      'Fixed: the grain on Acrylic and Frosted was far too heavy — it read as dirt on the screen rather than as texture, worst of all where a surface was set very transparent with little blur. It is now roughly the strength Windows uses, and finer.'
+    ]
+  },
+  {
     version: '2.0.0',
     changes: [
       'New: pick how every translucent surface is treated, in Settings under Appearance. "Glass" is the plain blur you have had until now and stays the default.',
