@@ -9,8 +9,18 @@ export type GlassStyle = 'glass' | 'acrylic' | 'frosted'
 
 export const GLASS_STYLES: GlassStyle[] = ['glass', 'acrylic', 'frosted']
 
+/**
+ * Which timestamp the Recently Played filter sorts and filters on.
+ * `everywhere` is `lastPlayed`, the later of our own launches and Steam's own
+ * record. `here` is `lastLaunchedHere`, only games started from this app.
+ */
+export type RecentSource = 'everywhere' | 'here'
+
+export const RECENT_SOURCES: RecentSource[] = ['everywhere', 'here']
+
 export interface UiPrefs {
   glassStyle: GlassStyle
+  recentSource: RecentSource
   topBarOpacity: number
   topBarBlur: number
   detailsBarOpacity: number
@@ -31,6 +41,7 @@ export interface UiPrefs {
 
 export const DEFAULT_UI_PREFS: UiPrefs = {
   glassStyle: 'glass',
+  recentSource: 'everywhere',
   topBarOpacity: 0.55,
   topBarBlur: 16,
   detailsBarOpacity: 0.55,
@@ -68,6 +79,9 @@ export function loadUiPrefs(): UiPrefs {
       glassStyle: GLASS_STYLES.includes(parsed.glassStyle as GlassStyle)
         ? (parsed.glassStyle as GlassStyle)
         : DEFAULT_UI_PREFS.glassStyle,
+      recentSource: RECENT_SOURCES.includes(parsed.recentSource as RecentSource)
+        ? (parsed.recentSource as RecentSource)
+        : DEFAULT_UI_PREFS.recentSource,
       topBarOpacity: clamp(Number(parsed.topBarOpacity), 0, 1, DEFAULT_UI_PREFS.topBarOpacity),
       topBarBlur: clamp(Number(parsed.topBarBlur), 0, 30, DEFAULT_UI_PREFS.topBarBlur),
       detailsBarOpacity: clamp(Number(parsed.detailsBarOpacity), 0, 1, DEFAULT_UI_PREFS.detailsBarOpacity),

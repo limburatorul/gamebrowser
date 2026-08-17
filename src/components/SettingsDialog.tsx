@@ -34,6 +34,7 @@ interface Props {
   hiddenGames: Game[]
   onUnhide: (id: string) => void
   onUnhideAll: () => void
+  onLaunchHidden: (id: string) => void
 }
 
 const GLASS_STYLE_LABELS: Record<GlassStyle, string> = {
@@ -96,7 +97,8 @@ export default function SettingsDialog({
   scanningTrainers,
   hiddenGames,
   onUnhide,
-  onUnhideAll
+  onUnhideAll,
+  onLaunchHidden
 }: Props): JSX.Element {
   const [tab, setTab] = useState<Tab>('appearance')
   const [clientId, setClientId] = useState(initial.igdbClientId)
@@ -729,6 +731,16 @@ export default function SettingsDialog({
                       <span className="hidden-name" title={game.installDir}>
                         {game.name}
                       </span>
+                      {/* Playable without bringing it back into the library
+                          first - that is the whole point of keeping it here. */}
+                      <button
+                        className="btn hidden-play"
+                        type="button"
+                        title={`Play ${game.name} without unhiding it`}
+                        onClick={() => onLaunchHidden(game.id)}
+                      >
+                        ▶ Play
+                      </button>
                       <button className="btn hidden-unhide" type="button" onClick={() => onUnhide(game.id)}>
                         Unhide
                       </button>

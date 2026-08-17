@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.1.0',
+    changes: [
+      'New: hidden games can be played straight from the list in Settings, without bringing them back into the library first. Settings stays open, so nothing you were editing is lost.',
+      'New: "Recently Played" can be narrowed to games you started from Game Browser, rather than everything Steam also knows about. The choice appears under the filter itself once it is selected.',
+      'Note that "from here" starts out empty on an existing library: until now the two were recorded as one date with no way to tell them apart, so it fills in from the next game you launch.',
+      '"What to Play" has moved to the top of the sidebar, above the filters — it is something you go to, not a way of narrowing the list.'
+    ]
+  },
+  {
     version: '2.0.1',
     changes: [
       'Fixed: the grain on Acrylic and Frosted was far too heavy — it read as dirt on the screen rather than as texture, worst of all where a surface was set very transparent with little blur. It is now roughly the strength Windows uses, and finer.'

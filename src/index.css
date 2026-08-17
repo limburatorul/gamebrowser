@@ -2653,9 +2653,46 @@ input[type='checkbox']:focus-visible {
   white-space: nowrap;
 }
 
-.hidden-unhide {
+.hidden-unhide,
+.hidden-play {
   flex-shrink: 0;
   padding: 4px 10px;
+}
+
+/* Sub-choice under an active sidebar filter. Indented to the same column as
+   the filter labels so it reads as belonging to the item above it. */
+.sidebar-subchoice {
+  display: flex;
+  gap: 6px;
+  padding: 4px 16px 6px 44px;
+}
+
+.sidebar-subchoice button {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sidebar-subchoice button:hover {
+  color: var(--text-0);
+}
+
+.sidebar-subchoice button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: var(--text-0);
+}
+
+.sidebar-divider {
+  height: 1px;
+  margin: 6px 16px 8px;
+  background: var(--border);
 }
 
 .import-menu-item.is-danger {
