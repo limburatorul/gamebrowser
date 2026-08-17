@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Category } from '@shared/types'
 import { formatPlaytime } from '../lib/localFile'
-import type { RecentSource } from '../lib/uiPrefs'
+import type { PlayedSource } from '../lib/uiPrefs'
 import { SteamIcon, EpicIcon, GogIcon, UbisoftIcon } from './icons/PlatformIcons'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -45,8 +45,13 @@ interface Props {
   onOpenAbout: () => void
   onOpenDashboard: () => void
   onOpenWhatToPlay: () => void
-  recentSource: RecentSource
-  onRecentSourceChange: (source: RecentSource) => void
+  recentSource: PlayedSource
+  onRecentSourceChange: (source: PlayedSource) => void
+  playtimeSource: PlayedSource
+  onPlaytimeSourceChange: (source: PlayedSource) => void
+  /** True when either source has any playtime, so the section (and its
+      chooser) stays put when the selected one happens to be empty. */
+  hasAnyPlaytime: boolean
 }
 
 const ITEMS: { key: LibraryFilter; label: string; icon: JSX.Element | string }[] = [
@@ -84,7 +89,10 @@ export default function Sidebar({
   onOpenDashboard,
   onOpenWhatToPlay,
   recentSource,
-  onRecentSourceChange
+  onRecentSourceChange,
+  playtimeSource,
+  onPlaytimeSourceChange,
+  hasAnyPlaytime
 }: Props): JSX.Element {
   const [addingCategory, setAddingCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -320,9 +328,35 @@ export default function Sidebar({
         />
       )}
 
-      {playtimeEntries.length > 0 && (
+      {/* Rendered whenever there is playtime in *either* source, not just in
+          the one currently shown - otherwise switching to "from here" on a
+          library that has none empties the list, hides the whole section, and
+          takes the chooser away with it, leaving no way back. */}
+      {hasAnyPlaytime && (
         <>
           <div className="sidebar-section-title">Playtime</div>
+          <div className="sidebar-subchoice sidebar-subchoice-flush">
+            <button
+              className={playtimeSource === 'everywhere' ? 'active' : ''}
+              title="All recorded time, including what Steam counted outside this app"
+              onClick={() => onPlaytimeSourceChange('everywhere')}
+            >
+              Everywhere
+            </button>
+            <button
+              className={playtimeSource === 'here' ? 'active' : ''}
+              title="Only time measured by Game Browser itself"
+              onClick={() => onPlaytimeSourceChange('here')}
+            >
+              From here
+            </button>
+          </div>
+          {playtimeEntries.length === 0 && (
+            <p className="sidebar-playtime-empty">
+              Nothing measured here yet. This app only started counting its own sessions separately in 2.2.0 — it
+              fills in as you play.
+            </p>
+          )}
           <ul className="sidebar-playtime-list">
             {playtimeEntries.map((entry) => {
               const max = playtimeEntries[0].playtimeSeconds

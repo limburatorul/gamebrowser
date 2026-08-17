@@ -15,7 +15,15 @@ export interface Game {
       sources were merged into `lastPlayed` with no way to tell them apart, so
       it starts empty on existing libraries and fills as games are launched. */
   lastLaunchedHere: string | null
+  /** Total time played from any source. Our own tracking accumulates into it,
+      and the Steam sync overwrites it whenever Steam's figure is larger, so
+      it is the "everywhere" number. */
   playtimeSeconds: number
+  /** Only the seconds this app measured itself, never touched by the Steam
+      sync. Same caveat as `lastLaunchedHere`: it cannot be backfilled, since
+      before it existed our own tally could be swallowed by Steam's larger
+      figure. Starts at zero and grows from the next session played here. */
+  playtimeSecondsHere: number
   source: 'manual' | 'folder-scan' | 'steam' | 'epic' | 'gog' | 'ubisoft'
   genres: string[]
   tags: string[]

@@ -330,9 +330,17 @@ export default function App(): JSX.Element {
     [browsableGames]
   )
 
+  // The sidebar's playtime list and its total both follow the chosen source.
+  // The Dashboard deliberately does not - it reports on the library as a
+  // whole, where the merged figure is the honest one.
+  const playtimeOf = useCallback(
+    (g: Game): number => (uiPrefs.playtimeSource === 'here' ? g.playtimeSecondsHere : g.playtimeSeconds),
+    [uiPrefs.playtimeSource]
+  )
+
   const totalPlaytimeSeconds = useMemo(
-    () => countedForPlaytime.reduce((sum, g) => sum + g.playtimeSeconds, 0),
-    [countedForPlaytime]
+    () => countedForPlaytime.reduce((sum, g) => sum + playtimeOf(g), 0),
+    [countedForPlaytime, playtimeOf]
   )
 
   const backdropCoverPaths = useMemo(
@@ -343,10 +351,10 @@ export default function App(): JSX.Element {
   const playtimeEntries = useMemo(
     () =>
       countedForPlaytime
-        .filter((g) => g.playtimeSeconds >= 60)
-        .sort((a, b) => b.playtimeSeconds - a.playtimeSeconds)
-        .map((g) => ({ id: g.id, name: g.name, playtimeSeconds: g.playtimeSeconds })),
-    [countedForPlaytime]
+        .filter((g) => playtimeOf(g) >= 60)
+        .sort((a, b) => playtimeOf(b) - playtimeOf(a))
+        .map((g) => ({ id: g.id, name: g.name, playtimeSeconds: playtimeOf(g) })),
+    [countedForPlaytime, playtimeOf]
   )
 
   const visibleGames = useMemo(() => {
@@ -1220,6 +1228,9 @@ export default function App(): JSX.Element {
           onOpenWhatToPlay={() => setWhatToPlayOpen(true)}
           recentSource={uiPrefs.recentSource}
           onRecentSourceChange={(recentSource) => setUiPrefs((p) => ({ ...p, recentSource }))}
+          playtimeSource={uiPrefs.playtimeSource}
+          onPlaytimeSourceChange={(playtimeSource) => setUiPrefs((p) => ({ ...p, playtimeSource }))}
+          hasAnyPlaytime={countedForPlaytime.some((g) => g.playtimeSeconds > 0 || g.playtimeSecondsHere > 0)}
         />
         <main className="main">
           <GameGrid

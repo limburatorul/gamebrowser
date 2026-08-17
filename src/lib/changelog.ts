@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.2.0',
+    changes: [
+      'New: the playtime list in the sidebar, and the total under it, can be narrowed to time this app measured itself rather than everything Steam also counted. The choice sits under the Playtime heading.',
+      'As with Recently Played, "from here" starts empty: until now our own tally could be replaced by Steam\'s larger figure, so there was nothing to separate out. It fills in from the next session you play.',
+      'The Dashboard deliberately keeps using the combined figure — it reports on the library as a whole, where that is the honest number.'
+    ]
+  },
+  {
     version: '2.1.0',
     changes: [
       'New: hidden games can be played straight from the list in Settings, without bringing them back into the library first. Settings stays open, so nothing you were editing is lost.',

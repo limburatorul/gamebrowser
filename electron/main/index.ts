@@ -118,6 +118,7 @@ async function loadLibrary(): Promise<void> {
       excludeFromPlaytime: g.excludeFromPlaytime ?? false,
       hidden: g.hidden ?? false,
       lastLaunchedHere: g.lastLaunchedHere ?? null,
+      playtimeSecondsHere: g.playtimeSecondsHere ?? 0,
       installSizeBytes: g.installSizeBytes ?? null,
       sizeMeasuredAt: g.sizeMeasuredAt ?? null,
       trainerPath: g.trainerPath ?? null,
@@ -1326,6 +1327,7 @@ async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]
       lastPlayed: null,
       lastLaunchedHere: null,
       playtimeSeconds: 0,
+      playtimeSecondsHere: 0,
       source: 'steam',
       genres: [],
       tags: [],
@@ -1385,6 +1387,7 @@ async function addNewEpicGames(installed: EpicManifest[]): Promise<Game[]> {
       lastPlayed: null,
       lastLaunchedHere: null,
       playtimeSeconds: 0,
+      playtimeSecondsHere: 0,
       source: 'epic',
       genres: [],
       tags: [],
@@ -1430,6 +1433,7 @@ async function addNewGogGames(installed: GogGame[]): Promise<Game[]> {
       lastPlayed: null,
       lastLaunchedHere: null,
       playtimeSeconds: 0,
+      playtimeSecondsHere: 0,
       source: 'gog',
       genres: [],
       tags: [],
@@ -1515,6 +1519,7 @@ async function addNewUbisoftGames(installed: InstalledUbisoftGame[]): Promise<Ga
       lastPlayed: null,
       lastLaunchedHere: null,
       playtimeSeconds: 0,
+      playtimeSecondsHere: 0,
       source: 'ubisoft',
       genres: [],
       tags: [],
@@ -1995,7 +2000,12 @@ async function launchGame(id: string): Promise<void> {
     const info = runningProcesses.get(id)
     runningProcesses.delete(id)
     if (info) {
-      game.playtimeSeconds += Math.round((Date.now() - info.start) / 1000)
+      const seconds = Math.round((Date.now() - info.start) / 1000)
+      game.playtimeSeconds += seconds
+      // Tracked separately because the Steam sync overwrites playtimeSeconds
+      // with its own figure whenever that is larger, which swallows whatever
+      // we measured. This tally is only ever written here.
+      game.playtimeSecondsHere += seconds
     }
     game.lastPlayed = new Date().toISOString()
     game.lastLaunchedHere = game.lastPlayed
@@ -2483,6 +2493,7 @@ function registerIpcHandlers(): void {
       lastPlayed: null,
       lastLaunchedHere: null,
       playtimeSeconds: 0,
+      playtimeSecondsHere: 0,
       source: 'manual',
       genres: [],
       tags: [],
@@ -2539,6 +2550,7 @@ function registerIpcHandlers(): void {
         lastPlayed: null,
         lastLaunchedHere: null,
         playtimeSeconds: 0,
+        playtimeSecondsHere: 0,
         source: 'folder-scan',
         genres: [],
         tags: [],

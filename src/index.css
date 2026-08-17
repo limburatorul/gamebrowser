@@ -2689,6 +2689,19 @@ input[type='checkbox']:focus-visible {
   color: var(--text-0);
 }
 
+/* Under a section title rather than nested beneath a filter item, so it does
+   not carry the filter list's indent. */
+.sidebar-subchoice-flush {
+  padding: 0 16px 8px;
+}
+
+.sidebar-playtime-empty {
+  margin: 0 16px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
 .sidebar-divider {
   height: 1px;
   margin: 6px 16px 8px;
