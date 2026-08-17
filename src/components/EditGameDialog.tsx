@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Category, Game, TrainerFileInfo } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import CoverImage from './CoverImage'
 import StarRating from './StarRating'
 
@@ -173,35 +174,39 @@ export default function EditGameDialog({
           launch — the game runs outside this app&apos;s reach, so there is nothing to time.
         </p>
 
-        <label className="settings-label">Trainer</label>
-        <select
-          className="select edit-trainer-select"
-          disabled={assigningTrainer}
-          value={game.trainerPath ?? ''}
-          onChange={async (e) => {
-            setAssigningTrainer(true)
-            try {
-              await onAssignTrainer(e.target.value || null)
-            } finally {
-              setAssigningTrainer(false)
-            }
-          }}
-        >
-          <option value="">No trainer</option>
-          {game.trainerPath && !trainerFiles.some((t) => t.path === game.trainerPath) && (
-            <option value={game.trainerPath}>{game.trainerPath.split('\\').pop()}</option>
-          )}
-          {trainerFiles.map((t) => (
-            <option key={t.path} value={t.path}>
-              {t.fileName}
-              {t.assigned && t.path !== game.trainerPath ? '  (used by another game)' : ''}
-            </option>
-          ))}
-        </select>
-        <p className="settings-note">
-          Pick one by hand when the automatic match missed it — it is copied into the app&apos;s trainer folder and
-          takes effect straight away, without waiting for Save.
-        </p>
+        {TRAINERS_ENABLED && (
+          <>
+            <label className="settings-label">Trainer</label>
+            <select
+              className="select edit-trainer-select"
+              disabled={assigningTrainer}
+              value={game.trainerPath ?? ''}
+              onChange={async (e) => {
+                setAssigningTrainer(true)
+                try {
+                  await onAssignTrainer(e.target.value || null)
+                } finally {
+                  setAssigningTrainer(false)
+                }
+              }}
+            >
+              <option value="">No trainer</option>
+              {game.trainerPath && !trainerFiles.some((t) => t.path === game.trainerPath) && (
+                <option value={game.trainerPath}>{game.trainerPath.split('\\').pop()}</option>
+              )}
+              {trainerFiles.map((t) => (
+                <option key={t.path} value={t.path}>
+                  {t.fileName}
+                  {t.assigned && t.path !== game.trainerPath ? '  (used by another game)' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="settings-note">
+              Pick one by hand when the automatic match missed it — it is copied into the app&apos;s trainer folder and
+              takes effect straight away, without waiting for Save.
+            </p>
+          </>
+        )}
 
         <label className="settings-label">Tags</label>
         <input

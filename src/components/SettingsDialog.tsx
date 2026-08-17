@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BackupEntry, BackupPrefs, Game, ScanProgress, Settings } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import { GLASS_STYLES, type GlassStyle, type UiPrefs } from '../lib/uiPrefs'
 import ColorPicker from './ColorPicker'
 import { ACCENT_PRESETS, SIDEBAR_PRESETS } from '../lib/color'
@@ -557,67 +558,71 @@ export default function SettingsDialog({
               {sweepingMetadata ? 'Checking…' : 'Check Now'}
             </button>
 
-            <h3 className="settings-section">Trainers</h3>
-            <div className="settings-slider-row">
-              <span className="settings-slider-label">Trainers folder</span>
-              <span className="backup-folder-path" title={initial.trainerFolder}>
-                {initial.trainerFolder || 'Not set'}
-              </span>
-              <button
-                className="btn"
-                type="button"
-                onClick={async () => {
-                  const picked = await onPickTrainerFolder()
-                  if (picked) void onScanTrainers()
-                }}
-              >
-                Choose Folder…
-              </button>
-            </div>
-            <div className="settings-slider-row">
-              <span className="settings-slider-label">Also copy to</span>
-              <span className="backup-folder-path" title={initial.trainerMirrorFolder}>
-                {initial.trainerMirrorFolder || 'Not set'}
-              </span>
-              <button
-                className="btn"
-                type="button"
-                onClick={async () => {
-                  const picked = await onPickTrainerMirrorFolder()
-                  if (picked) void onScanTrainers()
-                }}
-              >
-                Choose Folder…
-              </button>
-            </div>
+            {TRAINERS_ENABLED && (
+              <>
+                <h3 className="settings-section">Trainers</h3>
+                <div className="settings-slider-row">
+                  <span className="settings-slider-label">Trainers folder</span>
+                  <span className="backup-folder-path" title={initial.trainerFolder}>
+                    {initial.trainerFolder || 'Not set'}
+                  </span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={async () => {
+                      const picked = await onPickTrainerFolder()
+                      if (picked) void onScanTrainers()
+                    }}
+                  >
+                    Choose Folder…
+                  </button>
+                </div>
+                <div className="settings-slider-row">
+                  <span className="settings-slider-label">Also copy to</span>
+                  <span className="backup-folder-path" title={initial.trainerMirrorFolder}>
+                    {initial.trainerMirrorFolder || 'Not set'}
+                  </span>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={async () => {
+                      const picked = await onPickTrainerMirrorFolder()
+                      if (picked) void onScanTrainers()
+                    }}
+                  >
+                    Choose Folder…
+                  </button>
+                </div>
 
-            <div className="settings-slider-row">
-              <span className="settings-slider-label">Watch Downloads folder</span>
-              <input
-                type="checkbox"
-                checked={watchDownloadsForTrainers}
-                onChange={(e) => setWatchDownloadsForTrainers(e.target.checked)}
-              />
-            </div>
+                <div className="settings-slider-row">
+                  <span className="settings-slider-label">Watch Downloads folder</span>
+                  <input
+                    type="checkbox"
+                    checked={watchDownloadsForTrainers}
+                    onChange={(e) => setWatchDownloadsForTrainers(e.target.checked)}
+                  />
+                </div>
 
-            <p className="settings-note">
-              Point this at the folder where you keep your own trainer files. Matching ones are copied into the
-              app&apos;s data folder, so they stay with the library and are included in backups, and a Trainer button
-              appears next to Play instead of Find Trainer.
-            </p>
-            <p className="settings-note">
-              With the Downloads folder watched, a trainer you have just downloaded is picked up and filed on its own
-              within a few seconds — no rescan needed. Downloading itself is still a normal visit to the site: it
-              blocks automated requests, and the trainers are free because that traffic is what pays for them.
-            </p>
-            <button
-              className="btn"
-              type="button"
-              disabled={scanningTrainers || !initial.trainerFolder}
-              onClick={() => void onScanTrainers()}
-            >
-              {scanningTrainers ? 'Scanning…' : 'Rescan Trainers'}
-            </button>
+                <p className="settings-note">
+                  Point this at the folder where you keep your own trainer files. Matching ones are copied into the
+                  app&apos;s data folder, so they stay with the library and are included in backups, and a Trainer
+                  button appears next to Play instead of Find Trainer.
+                </p>
+                <p className="settings-note">
+                  With the Downloads folder watched, a trainer you have just downloaded is picked up and filed on its
+                  own within a few seconds — no rescan needed. Downloading itself is still a normal visit to the site:
+                  it blocks automated requests, and the trainers are free because that traffic is what pays for them.
+                </p>
+                <button
+                  className="btn"
+                  type="button"
+                  disabled={scanningTrainers || !initial.trainerFolder}
+                  onClick={() => void onScanTrainers()}
+                >
+                  {scanningTrainers ? 'Scanning…' : 'Rescan Trainers'}
+                </button>
+              </>
+            )}
 
             <h3 className="settings-section">Size on Disk</h3>
             <p className="settings-note">

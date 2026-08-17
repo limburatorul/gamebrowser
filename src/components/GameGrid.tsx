@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { Game, ViewMode } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import CoverImage from './CoverImage'
 import { formatDate, formatPlaytime, formatSize } from '../lib/localFile'
 
@@ -224,7 +225,7 @@ function GameTile({
         {/* Grouped so the size pill and the favourite star can share the top
             right corner without one needing to know the other's width. */}
         <div className="tile-badges-top">
-          {game.trainerPath && (
+          {TRAINERS_ENABLED && game.trainerPath && (
             <span className="trainer-badge" title="A trainer is available for this game">
               ⚡
             </span>
@@ -321,7 +322,7 @@ function ListRow({
       </div>
       <div className="list-row-name">
         {game.name}
-        {game.trainerPath && (
+        {TRAINERS_ENABLED && game.trainerPath && (
           <span className="trainer-inline" title="A trainer is available for this game">
             ⚡
           </span>

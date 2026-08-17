@@ -32,6 +32,7 @@ import type {
   MissingScanResult,
   DeleteFromDiskResult
 } from '../../shared/types'
+import { TRAINERS_ENABLED } from '../../shared/features'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
 import { findGogGames, type GogGame } from './gog'
@@ -1844,6 +1845,9 @@ async function mirrorTrainerFile(sourcePath: string, fileName: string): Promise<
 async function scanTrainers(): Promise<TrainerScanResult> {
   const folder = settings.trainerFolder
   const result: TrainerScanResult = { folder, trainerFiles: 0, matched: 0, unmatchedFiles: 0 }
+  // Switched off on this branch: nothing in the UI can reach this, but the
+  // guard means no leftover setting can quietly start touching folders again.
+  if (!TRAINERS_ENABLED) return { ...result, error: 'Trainers are not part of this build.' }
 
   // Sources, in priority order: whatever is already filed in userData, the
   // user's own folder, and Downloads when enabled - so a trainer downloaded a
@@ -1948,6 +1952,7 @@ function scheduleTrainerRescan(): void {
 
 function startTrainerWatchers(): void {
   for (const w of trainerWatchers.splice(0)) w.close()
+  if (!TRAINERS_ENABLED) return
   const folders = new Set<string>()
   if (settings.trainerFolder) folders.add(settings.trainerFolder)
   if (settings.watchDownloadsForTrainers) {
@@ -3496,7 +3501,7 @@ if (gotSingleInstanceLock) {
     // immediately when there's nothing due.
     startTrainerWatchers()
     // Catch anything that landed while the app was closed.
-    if (settings.trainerFolder || settings.watchDownloadsForTrainers) void scanTrainers()
+    if (TRAINERS_ENABLED && (settings.trainerFolder || settings.watchDownloadsForTrainers)) void scanTrainers()
 
     setTimeout(() => void sweepDiskSizes(), 60 * 1000)
     setInterval(() => void sweepDiskSizes(), METADATA_SWEEP_INTERVAL_MS)

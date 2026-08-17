@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Category } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import { formatPlaytime } from '../lib/localFile'
 import type { PlayedSource } from '../lib/uiPrefs'
 import { SteamIcon, EpicIcon, GogIcon, UbisoftIcon } from './icons/PlatformIcons'
@@ -58,7 +59,9 @@ const ITEMS: { key: LibraryFilter; label: string; icon: JSX.Element | string }[]
   { key: 'all', label: 'All Games', icon: '▦' },
   { key: 'recent', label: 'Recently Played', icon: '⏱' },
   { key: 'never-played', label: 'Never Played', icon: '◌' },
-  { key: 'has-trainer', label: 'Has Trainer', icon: '⚡' },
+  ...(TRAINERS_ENABLED
+    ? [{ key: 'has-trainer' as LibraryFilter, label: 'Has Trainer', icon: '⚡' }]
+    : []),
   { key: 'favorites', label: 'Favorites', icon: '★' },
   { key: 'no-cover', label: 'Missing Cover', icon: '🖼' },
   { key: 'steam', label: 'Steam', icon: <SteamIcon /> },

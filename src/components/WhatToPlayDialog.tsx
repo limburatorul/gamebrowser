@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { Game } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import CoverImage from './CoverImage'
 import { formatDuration, formatSize } from '../lib/localFile'
 import { pickOne, recommend, type Recommendation } from '../lib/recommend'
@@ -91,7 +92,7 @@ export default function WhatToPlayDialog({ games, onClose, onLaunch }: Props): J
                 )}
                 <div className="whattoplay-meta">
                   {pick.game.installSizeBytes !== null && <span>{formatSize(pick.game.installSizeBytes)}</span>}
-                  {pick.game.trainerPath && <span>⚡ Trainer</span>}
+                  {TRAINERS_ENABLED && pick.game.trainerPath && <span>⚡ Trainer</span>}
                 </div>
               </div>
             </div>

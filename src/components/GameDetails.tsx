@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Game } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import CoverImage from './CoverImage'
 import StarRating from './StarRating'
 import { formatDate, formatPlaytime, formatSize } from '../lib/localFile'
@@ -79,7 +80,7 @@ export default function GameDetails({
         <button className="btn btn-primary" onClick={() => onLaunch(game.id)} disabled={running}>
           {running ? 'Running…' : '▶ Play'}
         </button>
-        {game.trainerPath && (
+        {TRAINERS_ENABLED && game.trainerPath && (
           <button
             className="btn"
             title="Start the trainer, then the game"
@@ -89,17 +90,19 @@ export default function GameDetails({
             ▶ Play + Trainer
           </button>
         )}
-        <button
-          className="btn"
-          title={
-            game.trainerPath
-              ? `Run ${game.trainerPath.split('\\').pop()} on its own`
-              : 'Open the trainer site for this game in your browser'
-          }
-          onClick={() => (game.trainerPath ? onLaunchTrainer(game.id) : onFindTrainer(game.id))}
-        >
-          {game.trainerPath ? '⚡ Trainer' : 'Find Trainer'}
-        </button>
+        {TRAINERS_ENABLED && (
+          <button
+            className="btn"
+            title={
+              game.trainerPath
+                ? `Run ${game.trainerPath.split('\\').pop()} on its own`
+                : 'Open the trainer site for this game in your browser'
+            }
+            onClick={() => (game.trainerPath ? onLaunchTrainer(game.id) : onFindTrainer(game.id))}
+          >
+            {game.trainerPath ? '⚡ Trainer' : 'Find Trainer'}
+          </button>
+        )}
         <button className="btn" onClick={() => onToggleFavorite(game.id)}>
           {game.favorite ? '★ Favorite' : '☆ Favorite'}
         </button>

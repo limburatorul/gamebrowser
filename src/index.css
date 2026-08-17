@@ -2125,6 +2125,15 @@ input[type='checkbox']:focus-visible {
   font-size: 13px;
 }
 
+.about-dedication {
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.55;
+  text-align: center;
+}
+
 .dashboard-modal {
   width: 480px;
 }

@@ -13,6 +13,7 @@ import type {
   UpdateCheckResult,
   ViewMode
 } from '@shared/types'
+import { TRAINERS_ENABLED } from '@shared/features'
 import { formatPlaytime, formatSize } from './lib/localFile'
 import Sidebar, { type LibraryFilter } from './components/Sidebar'
 import TopBar from './components/TopBar'
@@ -191,7 +192,7 @@ export default function App(): JSX.Element {
   // stamped in from here - win.setTitle() in main would just get overwritten.
   useEffect(() => {
     window.api.getAppInfo().then((info) => {
-      document.title = `Game Browser ${info.version}`
+      document.title = `Game Browser ${info.version} — Built for AlphaWolf`
     })
   }, [])
 
@@ -422,7 +423,7 @@ export default function App(): JSX.Element {
   // Only loaded while the Edit dialog is open - walking the trainer folders on
   // every render would be wasteful, and the list only matters in there.
   useEffect(() => {
-    if (editingId === null) return
+    if (!TRAINERS_ENABLED || editingId === null) return
     void window.api.listTrainerFiles().then(setTrainerFiles)
   }, [editingId])
 

@@ -109,7 +109,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: '1.30.1',
     changes: [
-      'Fixed: the size and trainer markings on a cover, and the play button on hover, could be hidden behind the cover art itself — most reliably after resizing the window. Introduced by the cover work in 1.30.0.'
+      'Fixed: the size marking on a cover, and the play button on hover, could be hidden behind the cover art itself — most reliably after resizing the window. Introduced by the cover work in 1.30.0.'
     ]
   },
   {
@@ -142,9 +142,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     version: '1.28.0',
     changes: [
       'New: the Dashboard lists games installed in more than one place, with the full path and size of each copy, and how much space dropping the smaller ones would free. Nothing is deleted for you — the point is to let you decide which copy to keep.',
-      'New: launch options per game in the Edit dialog — command-line arguments and a run-as-administrator switch. Playtime is not measured for elevated launches, since the game then runs outside this app\'s reach.',
-      'New: a trainer can be picked by hand in the Edit dialog when automatic matching missed it or chose the wrong file.',
-      'New: matched trainers can also be copied to a second folder of your choosing, alongside the app\'s own copy.'
+      'New: launch options per game in the Edit dialog — command-line arguments and a run-as-administrator switch. Playtime is not measured for elevated launches, since the game then runs outside this app\'s reach.'
     ]
   },
   {
@@ -172,24 +170,7 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     version: '1.25.0',
     changes: [
-      'The window now remembers its size, position and whether it was maximised, and comes back the same way. It used to open at 1920×1080 in the default spot every single time. A position on a monitor that is no longer connected is ignored, so unplugging a screen cannot leave the window somewhere you cannot reach it.',
-      'New: "Play + Trainer" starts the trainer and then the game in one click, for games that have one.',
-      'New: a ⚡ mark on the cover of games with a trainer, and a "Has Trainer" filter in the sidebar.'
-    ]
-  },
-  {
-    version: '1.24.1',
-    changes: [
-      'Trainers now file themselves. Your trainers folder and, if you leave it enabled, your Downloads folder are watched — a trainer that appears there is matched and copied in within a few seconds, with no rescan and nothing to do by hand.',
-      'Anything that landed while the app was closed is picked up on the next start.'
-    ]
-  },
-  {
-    version: '1.24.0',
-    changes: [
-      'New: trainers are part of the library. Point Settings → Automation at the folder where you keep them and matching ones are copied into the app\'s own data folder, so they stay with the library and are included in backups.',
-      'New: a Trainer button next to Play launches the matching trainer. Games without one show Find Trainer instead, which opens the trainer site for that game in your browser.',
-      'Matching is deliberately strict about sequels — "Far Cry" will not be handed the Far Cry 5 trainer, and Watch Dogs will not get the Watch Dogs 2 one. Where several versions of the same trainer are kept, the newest file wins.'
+      'The window now remembers its size, position and whether it was maximised, and comes back the same way. It used to open at 1920×1080 in the default spot every single time. A position on a monitor that is no longer connected is ignored, so unplugging a screen cannot leave the window somewhere you cannot reach it.'
     ]
   },
   {
