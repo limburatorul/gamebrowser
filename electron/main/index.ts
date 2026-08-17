@@ -91,7 +91,9 @@ const categoriesFile = join(userDataPath, 'categories.json')
 // and settings.json holds things worth not rewriting constantly.
 const ignoredFoldersFile = join(userDataPath, 'ignoredFolders.json')
 
-const UPDATE_REPO = 'limburatorul/gamebrowser'
+// This branch releases to its own repo, so the self-updater only ever sees
+// builds made for AlphaWolf - a main-repo release would put the trainers back.
+const UPDATE_REPO = 'limburatorul/gamebrowser-alphawolf'
 
 let games: Game[] = []
 let settings: Settings = {

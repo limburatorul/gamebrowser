@@ -4,11 +4,11 @@ A standalone game library manager for Windows. It gathers everything you have in
 
 No launcher required, no account, no background service. It is a single portable `.exe` that keeps its data in a plain folder on your machine.
 
-![version](https://img.shields.io/github/v/release/limburatorul/gamebrowser)
+![version](https://img.shields.io/github/v/release/limburatorul/gamebrowser-alphawolf)
 
 ## Install
 
-Grab `Game Browser <version>.exe` from the [latest release](https://github.com/limburatorul/gamebrowser/releases/latest) and run it. There is no installer — put it wherever you like.
+Grab `Game Browser <version>.exe` from the [latest release](https://github.com/limburatorul/gamebrowser-alphawolf/releases/latest) and run it. There is no installer — put it wherever you like.
 
 The app updates itself: it checks for a newer release on startup, and can download and swap in the new version from the About dialog. Old versions are cleaned up automatically.
 
