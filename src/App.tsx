@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BackupPrefs,
   Category,
+  CompletionStatus,
   FolderScanResult,
   TrainerFileInfo,
   Game,
@@ -13,6 +14,7 @@ import type {
   UpdateCheckResult,
   ViewMode
 } from '@shared/types'
+import { COMPLETION_STATUSES, COMPLETION_LABELS } from '@shared/types'
 import { formatPlaytime, formatSize } from './lib/localFile'
 import Sidebar, { type LibraryFilter } from './components/Sidebar'
 import TopBar from './components/TopBar'
@@ -39,6 +41,8 @@ import { mixHex, hexToRgbString } from './lib/color'
 import { CHANGELOG, getChangesSince, type ChangelogEntry } from './lib/changelog'
 
 const LAST_SEEN_VERSION_KEY = 'gb_lastSeenVersion'
+/** How often to look for a new release while the app stays open. */
+const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
 const PLATFORM_SOURCES = new Set<Game['source']>(['steam', 'epic', 'gog', 'ubisoft'])
 
 export default function App(): JSX.Element {
@@ -47,8 +51,8 @@ export default function App(): JSX.Element {
   const [anchorId, setAnchorId] = useState<string | null>(null)
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<LibraryFilter>('all')
-  const [genreFilter, setGenreFilter] = useState('')
-  const [tagFilter, setTagFilter] = useState('')
+  const [genreFilter, setGenreFilter] = useState<string[]>([])
+  const [tagFilter, setTagFilter] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
@@ -100,6 +104,11 @@ export default function App(): JSX.Element {
   const [whatToPlayOpen, setWhatToPlayOpen] = useState(false)
   const [ignoredFolders, setIgnoredFolders] = useState<string[]>([])
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null)
+  // Deliberately a ref and deliberately not persisted: within a session
+  // "Later" means "stop asking", but a fresh launch is a fair moment to
+  // mention it again. Never consulted by the manual check in About - asking
+  // explicitly should always get an answer.
+  const dismissedUpdateRef = useRef<string | null>(null)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [sweepingScreenshots, setSweepingScreenshots] = useState(false)
   const [syncingPlaytime, setSyncingPlaytime] = useState(false)
@@ -176,15 +185,27 @@ export default function App(): JSX.Element {
   }, [])
 
   useEffect(() => {
-    // Silent on startup - only surface the dialog if an update actually is
+    // Silent either way - only surface the dialog if an update actually is
     // available, never a "you're up to date" or error toast for a check the
     // user didn't ask for.
-    const timer = setTimeout(() => {
-      window.api.checkForUpdate().then((result) => {
-        if (result.available) setUpdateCheck(result)
+    //
+    // Repeats rather than running once at startup: this app gets left open for
+    // days, and a startup-only check means a release published this morning is
+    // not seen until the next restart. Same lesson as the cover, screenshot,
+    // disk-size and platform sweeps, all of which shipped startup-only first.
+    const check = (): void => {
+      void window.api.checkForUpdate().then((result) => {
+        // Not a version the user has already waved away this session. Without
+        // this, "Later" would buy exactly thirty minutes of peace.
+        if (result.available && result.latestVersion !== dismissedUpdateRef.current) setUpdateCheck(result)
       })
-    }, 3000)
-    return () => clearTimeout(timer)
+    }
+    const first = setTimeout(check, 3000)
+    const repeat = setInterval(check, UPDATE_CHECK_INTERVAL_MS)
+    return () => {
+      clearTimeout(first)
+      clearInterval(repeat)
+    }
   }, [])
 
   // The window title comes from the page's <title>, so the version has to be
@@ -322,6 +343,12 @@ export default function App(): JSX.Element {
   // is deliberately the exception and still sees the whole library - it
   // reports on what is on disk, and hiding a game doesn't free its space.
   const browsableGames = useMemo(() => games.filter((g) => !g.hidden), [games])
+
+  const completionCounts = useMemo(() => {
+    const counts = Object.fromEntries(COMPLETION_STATUSES.map((s) => [s, 0])) as Record<CompletionStatus, number>
+    for (const g of browsableGames) if (g.completion) counts[g.completion]++
+    return counts
+  }, [browsableGames])
   const hiddenGames = useMemo(() => games.filter((g) => g.hidden), [games])
 
   // Games flagged "ignore playtime" keep their recorded seconds but are left
@@ -378,8 +405,15 @@ export default function App(): JSX.Element {
       const categoryId = filter.slice('category:'.length)
       list = list.filter((g) => g.categoryIds.includes(categoryId))
     }
-    if (genreFilter) list = list.filter((g) => g.genres.includes(genreFilter))
-    if (tagFilter) list = list.filter((g) => g.tags.includes(tagFilter))
+    if (filter.startsWith('status:')) {
+      const status = filter.slice('status:'.length)
+      list = list.filter((g) => g.completion === status)
+    }
+    // Any-of within a group, and-ed across the two: picking Action and RPG
+    // asks for games in either, the way a storefront's facets behave, while
+    // adding a tag on top narrows that result rather than widening it.
+    if (genreFilter.length > 0) list = list.filter((g) => genreFilter.some((f) => g.genres.includes(f)))
+    if (tagFilter.length > 0) list = list.filter((g) => tagFilter.some((f) => g.tags.includes(f)))
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter((g) => g.name.toLowerCase().includes(q))
@@ -992,6 +1026,16 @@ export default function App(): JSX.Element {
     }
   }
 
+  function handleSetCompletion(id: string, completion: CompletionStatus | null): void {
+    void window.api.update(id, { completion })
+  }
+
+  function handleBulkSetCompletion(completion: CompletionStatus | null): void {
+    for (const id of selectedIds) {
+      void window.api.update(id, { completion })
+    }
+  }
+
   async function handleBulkAddToCategory(categoryId: string): Promise<void> {
     await Promise.all(
       [...selectedIds].map((id) => {
@@ -1236,6 +1280,7 @@ export default function App(): JSX.Element {
           categoryCounts={Object.fromEntries(
             categories.map((c) => [c.id, browsableGames.filter((g) => g.categoryIds.includes(c.id)).length])
           )}
+          completionCounts={completionCounts}
           totalPlaytimeSeconds={totalPlaytimeSeconds}
           playtimeEntries={playtimeEntries}
           selectedIds={selectedIds}
@@ -1310,6 +1355,7 @@ export default function App(): JSX.Element {
               onClear={() => setSelectedIds(new Set())}
               onDelete={() => setConfirmBulkDelete(true)}
               onAddToCategory={handleBulkAddToCategory}
+              onSetCompletion={handleBulkSetCompletion}
               onRate={handleBulkRate}
               onHide={() => void handleBulkHide()}
               onUninstall={() => setConfirmBulkUninstall(true)}
@@ -1330,6 +1376,7 @@ export default function App(): JSX.Element {
               running={runningIds.has(game.id)}
               onClose={() => setContextMenu(null)}
               onLaunch={handleLaunch}
+              onSetCompletion={handleSetCompletion}
               onToggleFavorite={handleToggleFavorite}
               onTogglePlaytimeIgnored={handleTogglePlaytimeIgnored}
               onToggleHidden={handleToggleHidden}
@@ -1420,7 +1467,10 @@ export default function App(): JSX.Element {
           downloading={updateDownloading}
           error={updateError}
           onUpdate={() => void handleDownloadUpdate()}
-          onLater={() => setUpdateCheck(null)}
+          onLater={() => {
+            dismissedUpdateRef.current = updateCheck.latestVersion ?? null
+            setUpdateCheck(null)
+          }}
         />
       )}
       {whatsNew && (

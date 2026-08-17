@@ -30,7 +30,8 @@ import type {
   DriveUsage,
   MissingGameEntry,
   MissingScanResult,
-  DeleteFromDiskResult
+  DeleteFromDiskResult,
+  PlaySession
 } from '../../shared/types'
 import { createZip, extractZip } from './zip'
 import { writeFileAtomic, copyFileAtomic } from './fsAtomic'
@@ -89,6 +90,10 @@ const categoriesFile = join(userDataPath, 'categories.json')
 // a settings field: it is a list that grows every time a folder is scanned,
 // and settings.json holds things worth not rewriting constantly.
 const ignoredFoldersFile = join(userDataPath, 'ignoredFolders.json')
+// Append-only log of finished sessions. Its own file for the same reason
+// window.json is: it grows on its own schedule and shouldn't drag the whole
+// library through a rewrite every time a game exits.
+const sessionsFile = join(userDataPath, 'sessions.json')
 
 const UPDATE_REPO = 'limburatorul/gamebrowser'
 
@@ -119,6 +124,7 @@ async function loadLibrary(): Promise<void> {
       genres: g.genres ?? [],
       tags: g.tags ?? [],
       rating: g.rating ?? null,
+      completion: g.completion ?? null,
       categoryIds: g.categoryIds ?? [],
       excludeFromPlaytime: g.excludeFromPlaytime ?? false,
       hidden: g.hidden ?? false,
@@ -141,6 +147,31 @@ async function loadLibrary(): Promise<void> {
 
 async function saveLibrary(): Promise<void> {
   await fs.writeFile(libraryFile, JSON.stringify(games, null, 2), 'utf-8')
+}
+
+let sessions: PlaySession[] = []
+
+async function loadSessions(): Promise<void> {
+  try {
+    sessions = JSON.parse(await fs.readFile(sessionsFile, 'utf-8')) as PlaySession[]
+  } catch {
+    sessions = []
+  }
+}
+
+/**
+ * Never throws: a session is a nice-to-have record, and failing to write one
+ * must not take down the exit handler that also saves the playtime it belongs
+ * to. Written atomically so a crash mid-write can't leave unparseable JSON
+ * that would silently reset the whole history to empty on next load.
+ */
+async function appendSession(session: PlaySession): Promise<void> {
+  sessions.push(session)
+  try {
+    await writeFileAtomic(sessionsFile, Buffer.from(JSON.stringify(sessions), 'utf-8'))
+  } catch {
+    // history is lossy by design rather than fatal
+  }
 }
 
 async function loadSettings(): Promise<void> {
@@ -1356,6 +1387,7 @@ async function addNewSteamGames(installed: InstalledSteamGame[]): Promise<Game[]
       genres: [],
       tags: [],
       rating: null,
+      completion: null,
       categoryIds: [],
       excludeFromPlaytime: false,
       hidden: false,
@@ -1416,6 +1448,7 @@ async function addNewEpicGames(installed: EpicManifest[]): Promise<Game[]> {
       genres: [],
       tags: [],
       rating: null,
+      completion: null,
       categoryIds: [],
       excludeFromPlaytime: false,
       hidden: false,
@@ -1462,6 +1495,7 @@ async function addNewGogGames(installed: GogGame[]): Promise<Game[]> {
       genres: [],
       tags: [],
       rating: null,
+      completion: null,
       categoryIds: [],
       excludeFromPlaytime: false,
       hidden: false,
@@ -1548,6 +1582,7 @@ async function addNewUbisoftGames(installed: InstalledUbisoftGame[]): Promise<Ga
       genres: [],
       tags: [],
       rating: null,
+      completion: null,
       categoryIds: [],
       excludeFromPlaytime: false,
       hidden: false,
@@ -2030,6 +2065,16 @@ async function launchGame(id: string): Promise<void> {
       // with its own figure whenever that is larger, which swallows whatever
       // we measured. This tally is only ever written here.
       game.playtimeSecondsHere += seconds
+      // Same code path, no threshold: that is what keeps a game's recorded
+      // sessions summing to exactly its playtimeSecondsHere. Filtering short
+      // ones out here would quietly break that, so any "was this a real
+      // session?" judgement belongs in whatever displays them.
+      await appendSession({
+        gameId: id,
+        startedAt: new Date(info.start).toISOString(),
+        endedAt: new Date().toISOString(),
+        seconds
+      })
     }
     game.lastPlayed = new Date().toISOString()
     game.lastLaunchedHere = game.lastPlayed
@@ -2458,6 +2503,7 @@ async function runBackup(): Promise<BackupResult> {
         { zipPath: 'library.json', fsPath: libraryFile },
         { zipPath: 'settings.json', fsPath: settingsFile },
         { zipPath: 'categories.json', fsPath: categoriesFile },
+        { zipPath: 'sessions.json', fsPath: sessionsFile },
         { zipPath: 'covers', fsPath: coversDir, isDir: true },
         { zipPath: 'icons', fsPath: iconsDir, isDir: true },
         { zipPath: 'screenshots', fsPath: screenshotsDir, isDir: true },
@@ -2484,6 +2530,7 @@ async function restoreFromZip(zipPath: string): Promise<BackupResult> {
     await loadSettings()
     await loadCategories()
     await loadIgnoredFolders()
+    await loadSessions()
     broadcastLibrary()
     broadcastCategories()
     return { ok: true, path: zipPath, settings }
@@ -2651,6 +2698,7 @@ function registerIpcHandlers(): void {
       genres: [],
       tags: [],
       rating: null,
+      completion: null,
       categoryIds: [],
       excludeFromPlaytime: false,
       hidden: false,
@@ -2708,6 +2756,7 @@ function registerIpcHandlers(): void {
         genres: [],
         tags: [],
         rating: null,
+        completion: null,
         categoryIds: [],
         excludeFromPlaytime: false,
         hidden: false,
@@ -2798,6 +2847,7 @@ function registerIpcHandlers(): void {
           | 'favorite'
           | 'tags'
           | 'rating'
+          | 'completion'
           | 'categoryIds'
           | 'steamAppId'
           | 'excludeFromPlaytime'
@@ -2817,6 +2867,10 @@ function registerIpcHandlers(): void {
       return game
     }
   )
+
+  // Whole log in one go: it is small (a row per session), the Dashboard wants
+  // to aggregate over all of it anyway, and paging would buy nothing here.
+  ipcMain.handle('sessions:list', async (): Promise<PlaySession[]> => sessions)
 
   ipcMain.handle('games:setCover', async (_e, id: string) => {
     const game = games.find((g) => g.id === id)
@@ -3428,6 +3482,7 @@ if (gotSingleInstanceLock) {
     await loadSettings()
     await loadCategories()
     await loadIgnoredFolders()
+    await loadSessions()
 
     protocol.handle('local-file', async (request) => {
       const { pathname } = new URL(request.url)

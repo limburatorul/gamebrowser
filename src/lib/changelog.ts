@@ -6,6 +6,16 @@ export interface ChangelogEntry {
 // Newest first. Add a new entry here with every version bump.
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '2.10.0',
+    changes: [
+      'New: mark where you stand with a game — Backlog, Playing, Finished or Dropped. Set it from the right-click menu, the Edit dialog, or on a whole selection at once from the bar at the bottom. The sidebar gains a Status section with a count for each, and the Dashboard breaks the library down the same way.',
+      'New: "Reclaim Space" in the Dashboard turns the storage reports into something you can act on. Pick games off a list sorted biggest first — never played, finished, or everything measured — watch the running total of what you would get back, and clear them in one go. Games from a launcher are handed to it to uninstall; your own copies are deleted from disk.',
+      'New: play sessions are recorded, so the Dashboard can show what you actually played in the last week and month rather than only lifetime totals. This starts from today — older playtime was only ever kept as a running sum, with no record of when the time was spent — and only covers games started from here.',
+      'The genre and tag filters now take several values at once, so you can ask for two genres together instead of one at a time.',
+      'Game Browser now looks for a new version every half hour while it is open, not only at startup. Saying "Later" stops it asking again until the next time you start the app.'
+    ]
+  },
+  {
     version: '2.3.0',
     changes: [
       'Delete from Disk no longer gives up on a folder it cannot remove. It retries, and if that fails it looks for anything running from inside that folder and stops it — only processes from within the folder being deleted, nothing else. If there is still something in the way it offers to take ownership of the folder, which Windows will ask you to confirm.',

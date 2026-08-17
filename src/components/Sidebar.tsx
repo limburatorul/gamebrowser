@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Category } from '@shared/types'
+import type { Category, CompletionStatus } from '@shared/types'
+import { COMPLETION_STATUSES, COMPLETION_LABELS } from '@shared/types'
 import { formatPlaytime } from '../lib/localFile'
 import type { PlayedSource } from '../lib/uiPrefs'
 import { SteamIcon, EpicIcon, GogIcon, UbisoftIcon } from './icons/PlatformIcons'
@@ -17,6 +18,7 @@ export type LibraryFilter =
   | 'gog'
   | 'ubisoft'
   | `category:${string}`
+  | `status:${CompletionStatus}`
 
 export interface PlaytimeEntry {
   id: string
@@ -38,6 +40,7 @@ interface Props {
   ubisoftCount: number
   categories: Category[]
   categoryCounts: Record<string, number>
+  completionCounts: Record<CompletionStatus, number>
   totalPlaytimeSeconds: number
   playtimeEntries: PlaytimeEntry[]
   selectedIds: Set<string>
@@ -81,6 +84,7 @@ export default function Sidebar({
   ubisoftCount,
   categories,
   categoryCounts,
+  completionCounts,
   totalPlaytimeSeconds,
   playtimeEntries,
   selectedIds,
@@ -237,6 +241,32 @@ export default function Sidebar({
             <span className="sidebar-count"></span>
           </button>
         </li>
+      </ul>
+
+      {/* Its own section rather than four more entries in the list above:
+          those answer "which games", these answer "where do I stand with
+          them", and mixing the two made the list read as a heap. */}
+      <div className="sidebar-section-title">Status</div>
+      <ul className="sidebar-list">
+        {COMPLETION_STATUSES.map((status) => {
+          const key: LibraryFilter = `status:${status}`
+          return (
+            <li key={status}>
+              <button
+                className={`sidebar-item ${filter === key ? 'active' : ''}`}
+                // Clicking the active one clears it, so a status filter can be
+                // dropped without hunting for All Games.
+                onClick={() => onFilterChange(filter === key ? 'all' : key)}
+              >
+                <span className="sidebar-icon" data-key={key}>
+                  {COMPLETION_LABELS[status].icon}
+                </span>
+                <span>{COMPLETION_LABELS[status].label}</span>
+                <span className="sidebar-count">{completionCounts[status]}</span>
+              </button>
+            </li>
+          )
+        })}
       </ul>
 
       <div className="sidebar-section-title">Categories</div>

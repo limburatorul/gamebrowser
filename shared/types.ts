@@ -1,3 +1,15 @@
+export const COMPLETION_STATUSES = ['backlog', 'playing', 'finished', 'dropped'] as const
+export type CompletionStatus = (typeof COMPLETION_STATUSES)[number]
+
+/** Label and glyph for each status, so the sidebar, the Edit dialog, the
+    context menu and the Dashboard cannot drift apart on wording. */
+export const COMPLETION_LABELS: Record<CompletionStatus, { label: string; icon: string }> = {
+  backlog: { label: 'Backlog', icon: '◷' },
+  playing: { label: 'Playing', icon: '▶' },
+  finished: { label: 'Finished', icon: '✓' },
+  dropped: { label: 'Dropped', icon: '✕' }
+}
+
 export interface Game {
   id: string
   name: string
@@ -28,6 +40,11 @@ export interface Game {
   genres: string[]
   tags: string[]
   rating: number | null
+  /** Where the game stands with you, set by hand and never inferred. `null` is
+      "not said", which is deliberately different from `backlog` — most of a
+      large library has simply never been judged, and filing all of it under
+      "I intend to play this" would be a claim the user never made. */
+  completion: CompletionStatus | null
   categoryIds: string[]
   // Keeps counting playtime, but leaves the game out of every aggregate:
   // the sidebar's most-played list, the library total, and the dashboard.
@@ -58,6 +75,27 @@ export interface Game {
 export interface Category {
   id: string
   name: string
+}
+
+/**
+ * One session, appended when a game exits. Kept in its own `sessions.json`
+ * rather than on `Game`, because the list grows forever and rewriting every
+ * game's record to append one row would be wasteful.
+ *
+ * **Invariant worth keeping**: sessions are written by exactly the same code
+ * path that adds to `playtimeSecondsHere`, with no threshold, so the sessions
+ * recorded for a game always sum to the seconds this app measured itself.
+ * Elevated launches produce neither, for the same reason — the game is not our
+ * child process, so there is nothing to time.
+ *
+ * Like `playtimeSecondsHere`, this **cannot be backfilled**: before it existed
+ * only running totals were kept, with no record of when the time was spent.
+ */
+export interface PlaySession {
+  gameId: string
+  startedAt: string
+  endedAt: string
+  seconds: number
 }
 
 export interface GameCandidate {
@@ -343,6 +381,7 @@ export interface GameApi {
         | 'favorite'
         | 'tags'
         | 'rating'
+        | 'completion'
         | 'categoryIds'
         | 'steamAppId'
         | 'excludeFromPlaytime'
@@ -352,6 +391,7 @@ export interface GameApi {
       >
     >
   ): Promise<Game | null>
+  listSessions(): Promise<PlaySession[]>
   setCover(id: string): Promise<Game | null>
   setExePath(id: string): Promise<Game | null>
   remove(id: string): Promise<void>

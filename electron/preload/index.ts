@@ -34,6 +34,7 @@ const api: GameApi = {
   importCandidates: (candidates: GameCandidate[]) => ipcRenderer.invoke('games:importCandidates', candidates),
   launch: (id: string) => ipcRenderer.invoke('games:launch', id),
   update: (id: string, patch) => ipcRenderer.invoke('games:update', id, patch),
+  listSessions: () => ipcRenderer.invoke('sessions:list'),
   setCover: (id: string) => ipcRenderer.invoke('games:setCover', id),
   setExePath: (id: string) => ipcRenderer.invoke('games:setExePath', id),
   remove: (id: string) => ipcRenderer.invoke('games:remove', id),
