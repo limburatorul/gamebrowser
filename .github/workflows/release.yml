@@ -36,7 +36,10 @@ jobs:
       - name: Test the backup archive writer
         run: npm run test:zip
 
-      - name: Build portable exe
+      # `--publish never` lives in the dist script: with an NSIS target and a
+      # tag present, electron-builder decides to publish to GitHub itself and
+      # fails on the missing GH_TOKEN. Publishing is this workflow's job.
+      - name: Build installer
         run: npm run dist
 
       - name: Publish release
