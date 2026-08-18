@@ -3069,7 +3069,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('saves:backup', async (_e, id: string): Promise<SaveBackupResult> => backupSavesFor(id, false))
 
-  ipcMain.handle('saves:restore', async (_e, id: string, zipPath: string): Promise<SaveBackupResult> => {
+  // The game id is accepted for symmetry with the other saves: calls but
+  // deliberately unused — the archive's own saves.json is what says where each
+  // entry belongs, which is the only trustworthy answer once a game has been
+  // renamed or re-added under a new id.
+  ipcMain.handle('saves:restore', async (_e, _id: string, zipPath: string): Promise<SaveBackupResult> => {
     try {
       const staging = join(app.getPath('temp'), `gb-save-restore-${Date.now()}`)
       await extractZip(zipPath, staging)
@@ -3647,7 +3651,7 @@ async function loadWindowState(): Promise<WindowState | null> {
  * otherwise unplugging the monitor it was last on reopens the window somewhere
  * invisible, with no obvious way to get it back.
  */
-function positionIsOnSomeDisplay(x: number, y: number, width: number, height: number): boolean {
+function positionIsOnSomeDisplay(x: number, y: number, width: number): boolean {
   return screen.getAllDisplays().some((display) => {
     const b = display.workArea
     // Require a decent chunk of the titlebar to be reachable, not just a pixel.
@@ -3694,7 +3698,9 @@ function createWindow(saved: WindowState | null): void {
     saved !== null &&
     saved.x !== null &&
     saved.y !== null &&
-    positionIsOnSomeDisplay(saved.x, saved.y, saved.width, saved.height)
+    // Height is not part of the test on purpose: what has to be reachable is
+    // the titlebar, which the y check covers.
+    positionIsOnSomeDisplay(saved.x, saved.y, saved.width)
 
   const win = new BrowserWindow({
     width: saved?.width ?? 1920,
